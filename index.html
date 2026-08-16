@@ -12,14 +12,28 @@
     background:rgba(0,0,0,.7); z-index:10; }
   #caja { color:#fff; font-family:Georgia,serif; font-size:20px; text-align:center;
     background:rgba(30,15,5,.92); padding:25px 40px; border:3px solid #c8892f; border-radius:12px;
-    max-width:90vw; }
+    max-width:90vw; max-height:92vh; overflow-y:auto; }
+  .tit { font-size:34px; } .sub { font-size:24px; margin-top:4px; }
   #galeria { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
   #galeria img { height:70px; border-radius:6px; border:2px solid #c8892f; background:#fff; }
   #caja button { margin-top:16px; padding:12px 36px; font-size:22px; font-family:Georgia,serif;
     background:#c8892f; border:none; border-radius:6px; cursor:pointer; color:#2b1a0a; }
   #caja button:hover:not(:disabled) { background:#e8a94f; }
-  #btnPantalla { margin-top:16px; padding:16px 34px; font-size:22px; font-family:Georgia,serif;
-    background:#c8892f; border:none; border-radius:8px; cursor:pointer; color:#2b1a0a; }
+  /* menú compacto en pantallas bajas (móvil en horizontal) */
+  @media (max-height:520px){
+    #caja { padding:10px 18px; font-size:14px; }
+    .tit { font-size:22px; } .sub { font-size:15px; }
+    #galeria { margin-top:8px; gap:5px; }
+    #galeria img { height:42px; }
+    #caja button { padding:8px 24px; font-size:16px; margin-top:8px; }
+    #estadoCarga { margin-top:6px; font-size:13px; }
+    .chico { font-size:11px; margin-top:6px; }
+  }
+  /* pantalla previa: botón de pantalla completa */
+  #pantalla { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.85); z-index:15; }
+  #btnPantalla { padding:18px 42px; font-size:24px; font-family:Georgia,serif; background:#c8892f;
+    border:none; border-radius:10px; color:#2b1a0a; cursor:pointer; }
   .parpadea { animation: parp 1.1s ease-in-out infinite; }
   @keyframes parp { 0%,100%{opacity:1} 50%{opacity:0.35} }
   #gira { position:fixed; inset:0; background:#1a0f05; color:#fff; display:none;
@@ -45,13 +59,16 @@
   <p style="font-size:16px; margin-top:10px; color:#c8892f;">El oeste se vive en horizontal 🤠</p>
 </div>
 
+<div id="pantalla">
+  <button id="btnPantalla" class="parpadea">📱 PULSA PARA PANTALLA COMPLETA</button>
+</div>
+
 <div id="aviso"><div id="caja">
-  <div style="font-size:34px;">🤠 DUELO EN EL OESTE 🤠</div>
-  <div style="font-size:24px; margin-top:4px;">Yo soy Fevercade</div>
+  <div class="tit">🤠 DUELO EN EL OESTE 🤠</div>
+  <div class="sub">Yo soy Fevercade</div>
   <p id="estadoCarga" style="margin-top:10px;">Cargando forajidos…</p>
   <div id="galeria"></div>
-  <button id="btnPantalla" class="parpadea" style="display:none;">📱 PULSA PARA PANTALLA COMPLETA</button>
-  <p style="margin-top:10px;">Clic = disparar · R o ESPACIO = recargar (6 balas)<br>
+  <p class="chico" style="margin-top:10px;">Clic = disparar · R o ESPACIO = recargar (6 balas)<br>
   ⚠️ Si no los cazas a tiempo, ¡ellos te disparan a ti!<br>
   🔥 Encadena aciertos para multiplicar · 💥 HEADSHOT = doble</p>
   <button id="btnJugar" disabled style="opacity:.5">¡A JUGAR!</button>
@@ -64,6 +81,8 @@ const ctx = canvas.getContext('2d');
 const btnRecarga = document.getElementById('btnRecarga');
 const btnPantalla = document.getElementById('btnPantalla');
 const btnJugar = document.getElementById('btnJugar');
+const avisoEl = document.getElementById('aviso');
+const pantallaEl = document.getElementById('pantalla');
 let W, H;
 function resize(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; calcularZonas(); }
 
@@ -155,8 +174,9 @@ function fin(){
       }
     });
     if(esTouch){
-      btnJugar.style.display = 'none';          // en móvil, el botón es el de pantalla completa
-      btnPantalla.style.display = 'inline-block';
+      // en móvil: primero el botón de pantalla completa, el menú espera detrás
+      pantallaEl.style.display = 'flex';
+      avisoEl.style.display = 'none';
     } else {
       btnJugar.disabled = false; btnJugar.style.opacity = 1;
     }
@@ -632,9 +652,8 @@ function empezar(){
 
 function arrancar(){
   if(!cargado) return;
-  document.getElementById('aviso').style.display='none';
+  avisoEl.style.display='none';
   initAudio();
-  if(esTouch) pedirPantallaCompleta();
   empezar();
 }
 
@@ -663,10 +682,17 @@ btnRecarga.addEventListener('click', e=>{
   if(jugando) recargar();
 });
 
-// botón de pantalla completa (móvil)
-btnPantalla.addEventListener('click', e=>{ e.stopPropagation(); arrancar(); });
-// botón clásico (PC)
+// móvil: primero pantalla completa, luego se abre el menú
+btnPantalla.addEventListener('click', e=>{
+  e.stopPropagation();
+  pedirPantallaCompleta();
+  pantallaEl.style.display = 'none';
+  avisoEl.style.display = 'flex';
+});
+// PC: el botón de siempre
 btnJugar.addEventListener('click', arrancar);
+// menú (táctil o PC): a jugar
+btnJugar.addEventListener('touchend', e=>{ e.preventDefault(); arrancar(); });
 
 resize();
 actualizarOrientacion();
