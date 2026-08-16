@@ -26,7 +26,6 @@
     font-family:Georgia,serif; text-align:center; font-size:24px; }
   #gira .fono { font-size:90px; animation: rotar 1.8s ease-in-out infinite; }
   @keyframes rotar { 0%,25% {transform:rotate(0deg);} 70%,100% {transform:rotate(90deg);} }
-  /* botón de recarga táctil */
   #btnRecarga { position:fixed; right:16px; bottom:16px; width:76px; height:76px; border-radius:50%;
     background:rgba(200,137,47,0.9); border:3px solid #6b4a2a; color:#2b1a0a; font-size:32px;
     display:none; z-index:5; cursor:pointer; font-family:Georgia,serif;
@@ -64,19 +63,21 @@ const ctx = canvas.getContext('2d');
 const btnRecarga = document.getElementById('btnRecarga');
 let W, H;
 function resize(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; calcularZonas(); }
-addEventListener('resize', resize);
 
-// ---------- MÓVIL / ORIENTACIÓN ----------
+// ---------- ORIENTACIÓN (móvil y PC) ----------
 const esTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 let cargado = false, pausa = false;
 
 function actualizarOrientacion(){
   const portrait = innerHeight > innerWidth;
-  const mostrar = esTouch && portrait;
-  document.getElementById('gira').style.display = mostrar ? 'flex' : 'none';
-  pausa = mostrar && jugando;
+  document.getElementById('gira').style.display = portrait ? 'flex' : 'none';
+  pausa = portrait && jugando; // en vertical el duelo se congela
 }
-addEventListener('orientationchange', actualizarOrientacion);
+// varios avisos de giro/resize, con retardo para leer las medidas ya frescas
+addEventListener('resize', () => { resize(); setTimeout(actualizarOrientacion, 60); });
+addEventListener('orientationchange', () => setTimeout(actualizarOrientacion, 60));
+const mqPortrait = matchMedia('(orientation: portrait)');
+if(mqPortrait.addEventListener) mqPortrait.addEventListener('change', () => setTimeout(actualizarOrientacion, 60));
 
 function pedirPantallaCompleta(){
   const el = document.documentElement;
@@ -96,7 +97,7 @@ const ARCHIVOS = ['chocobo.png','danifm.png','daniju.png','eljefe.png','gunner.p
 const NOMBRES = ['Chocobo','Danifm','Daniju','El Jefe','Gunner','La Jefa',
   'Mario','Minato','Perickko','Pixelmaster','Toni','Wuantiles'];
 const RATIO_IMG = 842/1264;
-const EMOJIS_RESERVA = ['🐔','','️','','','😎','','🌀','','','',''];
+const EMOJIS_RESERVA = ['🐔','','🕵️','','','😎','','🌀','','','',''];
 
 const PENALIZACION = 10;
 
@@ -651,7 +652,6 @@ canvas.addEventListener('touchstart', e=>{
 addEventListener('keydown', e=>{
   if(e.key==='r'||e.key==='R'||e.key===' '){ e.preventDefault(); recargar(); }
 });
-// botón de recarga táctil
 btnRecarga.addEventListener('touchstart', e=>{
   e.preventDefault(); e.stopPropagation();
   initAudio();
