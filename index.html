@@ -10,7 +10,7 @@
   #game  { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; }
   #juego { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:2;
     cursor:none; touch-action:none; }
-  #caballoImg { position:fixed; left:0; top:0; z-index:3; display:none; pointer-events:none; }
+  #caballoImg, #caballo2Img { position:fixed; left:0; top:0; z-index:3; display:none; pointer-events:none; }
   #fx { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:4;
     pointer-events:none; }
   #aviso { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -68,6 +68,7 @@ window.addEventListener('error', function(e){
 <canvas id="game"></canvas>
 <canvas id="juego"></canvas>
 <img id="caballoImg" alt="">
+<img id="caballo2Img" alt="">
 <canvas id="fx"></canvas>
 
 <button id="btnRecarga" title="Recargar">🔄</button>
@@ -228,7 +229,7 @@ function bakeTown(){
   for(let x=x1+14;x<x2-10;x+=26)lgm(x,528,6,38,[[0,'#6a4526'],[1,'#3a2010']],false)}
  const pc=L.postC;
  railing(8,pc[0]-16); railing(pc[pc.length-1]+16,IW-8);
-  for(let i=0;i<pc.length-1;i++){if(pc[i]<CX+220&&pc[i+1]>CX-220)continue; railing(pc[i]+16,pc[i+1]-16)}
+ for(let i=0;i<pc.length-1;i++){if(pc[i]<CX+220&&pc[i+1]>CX-220)continue; railing(pc[i]+16,pc[i+1]-16)}
  L.loC.forEach(c=>winR(c-44,440,88,104,true));
  P(CX-62,410,124,10,'#3e2812');
  lgm(CX-56,420,112,16,[[0,'#ffe2a0'],[1,'#f2a65a']]);
@@ -365,17 +366,18 @@ requestAnimationFrame(loop);
 <script>
 /* ================= MECÁNICA DEL JUEGO (overlay por capas) ================= */
 (() => {
-const cj = document.getElementById('juego');   // capa personajes (z2)
+const cj = document.getElementById('juego');
 const octx = cj.getContext('2d');
-const fx = document.getElementById('fx');       // capa efectos/UI (z4)
+const fx = document.getElementById('fx');
 const fctx = fx.getContext('2d');
-let O = fctx; // contexto activo para efectos/HUD
+let O = fctx;
 const btnRecarga = document.getElementById('btnRecarga');
 const btnPantalla = document.getElementById('btnPantalla');
 const btnJugar = document.getElementById('btnJugar');
 const avisoEl = document.getElementById('aviso');
 const pantallaEl = document.getElementById('pantalla');
-const caballoImgEl = document.getElementById('caballoImg'); // jinete animado (z3)
+const caballoImgEl  = document.getElementById('caballoImg');
+const caballo2ImgEl = document.getElementById('caballo2Img');
 function resizeJ(){
   cj.width = innerWidth; cj.height = innerHeight;
   fx.width = innerWidth; fx.height = innerHeight;
@@ -444,7 +446,7 @@ for(let i=0; i<ARCHIVOS.length; i++){
   img.src = ARCHIVOS[i];
 }
 
-// ---------- TRÁFICO DEL OESTE: 2 DELOREANS + 1 JINETE ANIMADO ----------
+// ---------- TRÁFICO: 2 DELOREANS + 2 JINETES ----------
 let cocheSprite = null, cocheRatio = 768/432;
 {
   const img = new Image();
@@ -469,6 +471,12 @@ caballoImgEl.addEventListener('load', ()=>{
     caballoRatio = caballoImgEl.naturalWidth / caballoImgEl.naturalHeight;
 });
 caballoImgEl.src = 'gunner-a-caballo.webp';
+let caballo2Ratio = 232/300;
+caballo2ImgEl.addEventListener('load', ()=>{
+  if(caballo2ImgEl.naturalWidth>0)
+    caballo2Ratio = caballo2ImgEl.naturalWidth / caballo2ImgEl.naturalHeight;
+});
+caballo2ImgEl.src = 'wuantiles-a-caballo.webp';
 
 function finCarga(){
   if(++listos === ARCHIVOS.length){
@@ -507,12 +515,15 @@ let dano = 0, shake = 0;
 let coches = [
   { dir: 1,  timer: 6,  c: null, tipo:'coche1' },
   { dir: -1, timer: 14, c: null, tipo:'coche2' },
-  { dir: 1,  timer: 20, c: null, tipo:'caballo' }
+  { dir: 1,  timer: 20, c: null, tipo:'caballo' },
+  { dir: -1, timer: 28, c: null, tipo:'caballo2' }
 ];
 let raton = {x:innerWidth/2, y:innerHeight/2};
 
 function multPorRacha(r){ return r>=12?5 : r>=9?4 : r>=6?3 : r>=3?2 : 1; }
 function easeOut(t){ return 1 - Math.pow(1-t, 3); }
+function esCaballoTipo(t){ return t==='caballo' || t==='caballo2'; }
+function imgDeCaballo(t){ return t==='caballo' ? caballoImgEl : caballo2ImgEl; }
 
 function rectSpawn(i){
   try{
@@ -534,9 +545,21 @@ function bocaCanon(x,y){
   return { ang, bx:gx + Math.cos(ang)*80*S, by:gy + Math.sin(ang)*80*S };
 }
 
-// ---------- SONIDOS ----------
+// ---------- SONIDOS (con trucos anti-pérdida en móvil) ----------
 let audioCtx = null;
-function initAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+function initAudio(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+}
+// TRUCO 1: si la página vuelve a ser visible (pantalla encendida, volver a la app),
+// el audio se reactiva solo.
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) initAudio(); });
+// TRUCO 2: cualquier toque/clic despierta el audio (desbloqueo en gesto).
+document.addEventListener('pointerdown', initAudio);
+document.addEventListener('touchstart', initAudio, {passive:true});
+
 const RUTAS_SONIDO = {
   disparo:'disparo.ogg', disparo2:'disparo2.ogg', recarga:'recarga.ogg', ouch:'ouch.ogg',
   lajefa:'lajefa.ogg', perickko:'perickko.ogg', chocobo:'chocobo.ogg',
@@ -545,12 +568,27 @@ const RUTAS_SONIDO = {
 };
 const SONIDOS_ESPECIALES = { 'lajefa.png':'lajefa', 'perickko.png':'perickko', 'chocobo.png':'chocobo' };
 const SONIDOS_DISPARO_ESPECIALES = { 'pixelmaster.png':'disparoPixel' };
-for(const k in RUTAS_SONIDO){ const a = new Audio(RUTAS_SONIDO[k]); a.preload='auto'; }
+
+// TRUCO 3: pool de reproductores por sonido: el móvil nunca se queda sin "cacharros" para sonar
+const POOL = {};
 function reproducir(k, volumen=1, rate=1){
-  const c = new Audio(RUTAS_SONIDO[k]);
-  c.volume = volumen; c.playbackRate = rate;
-  c.play().catch(()=>{});
-  return c;
+  const ruta = RUTAS_SONIDO[k];
+  if(!ruta) return null;
+  if(!POOL[k]) POOL[k] = [];
+  const pool = POOL[k];
+  let el = null;
+  for(const a of pool){ if(a.ended || a.paused){ el = a; break; } }
+  if(!el){
+    if(pool.length < 8){ el = new Audio(ruta); pool.push(el); }
+    else { el = pool.shift(); pool.push(el); } // recicla el más antiguo
+  }
+  try{
+    el.currentTime = 0;
+    el.volume = volumen;
+    el.playbackRate = rate;
+    el.play().catch(()=>{});
+  }catch(e){}
+  return el;
 }
 function sonidoSeco(f){
   if(!audioCtx) return;
@@ -594,9 +632,10 @@ function disparoEnemigo(a){
 
 // ---------- TRÁFICO: lógica + CÁMARA LENTA (deloreans) + SONIDOS ----------
 function spriteDe(st){
-  if(st.tipo==='coche1')  return [cocheSprite,  cocheRatio,  200, 647];
-  if(st.tipo==='coche2')  return [coche2Sprite, coche2Ratio, 200, 647];
-  return [null, caballoRatio, 220, 0];
+  if(st.tipo==='coche1')   return [cocheSprite,  cocheRatio,  200, 647];
+  if(st.tipo==='coche2')   return [coche2Sprite, coche2Ratio, 200, 647];
+  if(st.tipo==='caballo')  return [null, caballoRatio,  220, 0];
+  return [null, caballo2Ratio, 220, 0];
 }
 function actualizarCoches(dt){
   if(typeof IW === 'undefined') return;
@@ -604,15 +643,16 @@ function actualizarCoches(dt){
   const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
   for(const st of coches){
     const [sprite, ratio, hInt, velBase] = spriteDe(st);
-    if(st.tipo!=='caballo' && !sprite) continue;
-    const esDelorean = (st.tipo !== 'caballo');
+    const esCab = esCaballoTipo(st.tipo);
+    if(!esCab && !sprite) continue;
+    const esDelorean = !esCab;
     if(!st.c){
       if(jugando){
         st.timer -= dt;
         if(st.timer<=0){
           let vel = velBase;
-          if(!esDelorean){
-            const dur = 5 + Math.random()*1.5; // jinete: mínimo 5 s en pantalla
+          if(esCab){
+            const dur = 5 + Math.random()*1.5;
             vel = (IW + hInt*ratio + 120) / dur;
           }
           st.c = { xInt: st.dir>0 ? -hInt*ratio-60 : IW+60,
@@ -671,15 +711,15 @@ function actualizarCoches(dt){
         st.c = null; st.timer = 8 + Math.random()*8;
       }
     }
-    // el jinete animado vive en su propia capa DOM (z3)
-    if(st.tipo==='caballo'){
+    if(esCab){
+      const el = imgDeCaballo(st.tipo);
       if(st.c){
-        caballoImgEl.style.display='block';
-        caballoImgEl.style.width = st.c.w+'px';
-        caballoImgEl.style.height = st.c.h+'px';
-        caballoImgEl.style.transform = 'translate('+(st.c.x-st.c.w/2)+'px,'+(st.c.y-st.c.h/2)+'px)';
+        el.style.display='block';
+        el.style.width = st.c.w+'px';
+        el.style.height = st.c.h+'px';
+        el.style.transform = 'translate('+(st.c.x-st.c.w/2)+'px,'+(st.c.y-st.c.h/2)+'px)';
       } else {
-        caballoImgEl.style.display='none';
+        el.style.display='none';
       }
     }
   }
@@ -754,7 +794,7 @@ function disparar(x,y){
       if(c.snd) c.snd.pause();
       efectos.push({tipo:'flashEnemigo', x:c.x, y:c.y+c.h*0.2, vida:0.2});
       efectos.push({tipo:'acertado', x:c.x, y:c.y-c.h*0.55, vida:0.9,
-        texto:(st.tipo==='caballo' ? '🐎 ¡AL GALOPE! +' : '🚗 ¡COCHAZO! +')+pts+(mult>1?' (x'+mult+')':''),
+        texto:(esCaballoTipo(st.tipo) ? '🐎 ¡AL GALOPE! +' : '🚗 ¡COCHAZO! +')+pts+(mult>1?' (x'+mult+')':''),
         color:'#8affff'});
       st.c = null; st.timer = 8 + Math.random()*8;
       return;
@@ -823,12 +863,11 @@ function dibujarPersonajes(){
 function dibujarCoches(){
   for(const st of coches){
     const c = st.c; if(!c) continue;
-    if(st.tipo==='caballo'){
-      // la polvareda del jinete va en la capa de personajes (debajo de él)
+    if(esCaballoTipo(st.tipo)){
       octx.fillStyle='rgba(170,130,80,0.30)';
       for(let i=0;i<3;i++){
         octx.beginPath();
-        octx.arc(c.x - c.w*0.52 - i*12, c.y + c.h*0.44 - i*5, 7+i*5, 0, Math.PI*2);
+        octx.arc(c.x - st.dir*c.w*0.52 - st.dir*i*12, c.y + c.h*0.44 - i*5, 7+i*5, 0, Math.PI*2);
         octx.fill();
       }
       continue;
@@ -960,7 +999,6 @@ function bucle(t){
   const shx = shake>0 ? (Math.random()-0.5)*10*shake : 0;
   const shy = shake>0 ? (Math.random()-0.5)*10*shake : 0;
 
-  // capa 1 (z2): agujeros + personajes de ventanas/puerta + deloreans
   octx.clearRect(0,0,cj.width,cj.height);
   octx.save();
   octx.translate(shx, shy);
@@ -968,9 +1006,7 @@ function bucle(t){
   dibujarPersonajes();
   dibujarCoches();
   octx.restore();
-  // (el caballo animado vive en su <img> z3, entre ambas capas)
 
-  // capa 2 (z4): efectos, revólver, daño, HUD y mira
   fctx.clearRect(0,0,fx.width,fx.height);
   fctx.save();
   fctx.translate(shx, shy);
@@ -986,6 +1022,7 @@ function bucle(t){
   if(!jugando && tiempo<=0){
     if(esTouch) btnRecarga.style.display = 'none';
     caballoImgEl.style.display = 'none';
+    caballo2ImgEl.style.display = 'none';
     fctx.fillStyle='rgba(0,0,0,0.6)'; fctx.fillRect(0,0,fx.width,fx.height);
     fctx.fillStyle='#ffd97a'; fctx.textAlign='center';
     fctx.font='bold 42px Georgia'; fctx.fillText('🤠 ¡SE ACABÓ EL TIEMPO!', fx.width/2, fx.height/2-80);
@@ -1017,6 +1054,7 @@ function empezar(){
   coches[0].c=null; coches[0].timer=6;
   coches[1].c=null; coches[1].timer=14;
   coches[2].c=null; coches[2].timer=20;
+  coches[3].c=null; coches[3].timer=28;
   tiroteados = Array(ARCHIVOS.length).fill(0);
   dispararon = Array(ARCHIVOS.length).fill(0);
   spawnTimer=0.3; jugando=true;
