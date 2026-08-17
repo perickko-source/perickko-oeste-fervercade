@@ -53,7 +53,6 @@
   #fallo { display:none; position:fixed; left:8px; bottom:8px; z-index:60; max-width:92vw;
     background:#400808; color:#ffcccc; font:12px monospace; padding:8px 10px;
     border-radius:6px; white-space:pre-wrap; }
-  /* ventanita de nuevo récord */
   #record { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     background:rgba(0,0,0,.6); z-index:12; }
   .cajaRec { background:rgba(30,15,5,.95); border:3px solid #c8892f; border-radius:12px;
@@ -107,6 +106,7 @@ window.addEventListener('error', function(e){
   <div class="sub">Yo soy Fevercade</div>
   <p id="estadoCarga" style="margin-top:10px;">Cargando forajidos…</p>
   <p id="lineaRecord" style="margin-top:8px; color:#ffd97a;"></p>
+  <p id="lineaTop" style="margin-top:4px; color:#e8c96a; font-size:16px;"></p>
   <div id="galeria"></div>
   <p class="chico" style="margin-top:10px;">Clic = disparar · R o ESPACIO = recargar (6 balas)<br>
   ⚠️ Si no los cazas a tiempo, ¡ellos te disparan a ti!<br>
@@ -418,6 +418,27 @@ function resizeJ(){
 addEventListener('resize', resizeJ);
 resizeJ();
 
+// ---------- RÉCORD ONLINE (API en Render) ----------
+const API_URL = 'https://oeste-api.onrender.com';
+
+function enviarRecordOnline(nom, pts){
+  if(!API_URL) return;
+  fetch(API_URL+'/api/record', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name:nom, score:pts})
+  }).catch(()=>{});
+}
+function cargarTopOnline(){
+  const el = document.getElementById('lineaTop');
+  if(!API_URL){ el.textContent=''; return; }
+  fetch(API_URL+'/api/top').then(r=>r.json()).then(top=>{
+    const t3 = (top||[]).slice(0,3).map(r=>r.name+' ('+r.score+')');
+    el.textContent = t3.length ? '🌐 Top del saloon: '+t3.join(' · ')
+                               : '🌐 Top del saloon: aún vacío';
+  }).catch(()=>{ el.textContent=''; });
+}
+
 // ---------- RÉCORD LOCAL CON NOMBRE ----------
 let record = null;
 try{ record = JSON.parse(localStorage.getItem('fevercadeRecord')||'null'); }catch(e){}
@@ -532,6 +553,7 @@ function finCarga(){
       '🖼 Forajidos cargados: <b>'+n+'</b> de '+ARCHIVOS.length+
       (n<ARCHIVOS.length ? ' (los que faltan saldrán con emoji)' : '');
     pintarRecord();
+    cargarTopOnline();
     const gal = document.getElementById('galeria');
     personajes.forEach((p,i)=>{
       if(p.sprite){
@@ -1079,7 +1101,6 @@ function bucle(t){
   dibujarHUD();
   if(!esTouch) dibujarMira();
   if(!jugando && tiempo<=0){
-    // ¿nuevo récord? (una sola vez por partida)
     if(!recordCheckHecho){
       recordCheckHecho = true;
       if(score>0 && (!record || score>record.score)){
@@ -1157,7 +1178,7 @@ cj.addEventListener('touchstart', e=>{
   disparar(t.clientX, t.clientY);
 }, {passive:false});
 addEventListener('keydown', e=>{
-  if(e.target === nombreRec) return; // no recargar mientras escribes tu nombre
+  if(e.target === nombreRec) return;
   if(e.key==='r'||e.key==='R'||e.key===' '){ e.preventDefault(); recargar(); }
 });
 btnRecarga.addEventListener('touchstart', e=>{
@@ -1176,7 +1197,7 @@ btnPantalla.addEventListener('click', e=>{
 btnJugar.addEventListener('click', e=>{ e.stopPropagation(); arrancar(); });
 avisoEl.addEventListener('click', ()=>{ arrancar(); });
 
-// ---------- guardar récord ----------
+// ---------- guardar récord (local + online) ----------
 btnGuardar.addEventListener('click', e=>{
   e.stopPropagation();
   const nom = (nombreRec.value||'').trim() || 'Anónimo';
@@ -1185,6 +1206,8 @@ btnGuardar.addEventListener('click', e=>{
     localStorage.setItem('fevercadeRecord', JSON.stringify(record));
     localStorage.setItem('fevercadeNombre', nom);
   }catch(err){}
+  enviarRecordOnline(nom, score);
+  setTimeout(cargarTopOnline, 3000);
   nombrePrev = nom;
   recordEl.style.display = 'none';
   esperandoNombre = false;
