@@ -534,6 +534,13 @@ function rectSpawn(i){
   return {x:cj.width*d[0]-h*0.39, y:cj.height*d[1]-h/2, w:h*0.78, h:h};
 }
 
+// ---------- EL GATO DEL TEJADO (objetivo secreto) ----------
+function gatoRect(){
+  const s = Math.max(cv.width/IW, cv.height/IH);
+  const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
+  return { x: ox + (L.cat-26)*s, y: oy + 92*s, w: 46*s, h: 58*s };
+}
+
 // ---------- REVÓLVER ----------
 function datosPistola(){
   const S = Math.max(0.8, Math.min(1.5, Math.min(cj.width,cj.height)/700));
@@ -553,10 +560,7 @@ function initAudio(){
   }
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
 }
-// TRUCO 1: si la página vuelve a ser visible (pantalla encendida, volver a la app),
-// el audio se reactiva solo.
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) initAudio(); });
-// TRUCO 2: cualquier toque/clic despierta el audio (desbloqueo en gesto).
 document.addEventListener('pointerdown', initAudio);
 document.addEventListener('touchstart', initAudio, {passive:true});
 
@@ -564,12 +568,11 @@ const RUTAS_SONIDO = {
   disparo:'disparo.ogg', disparo2:'disparo2.ogg', recarga:'recarga.ogg', ouch:'ouch.ogg',
   lajefa:'lajefa.ogg', perickko:'perickko.ogg', chocobo:'chocobo.ogg',
   disparoPixel:'disparo-pixelmaster.ogg', delorian:'delorian.ogg',
-  trote:'trotedecaballo.ogg'
+  trote:'trotedecaballo.ogg', miau:'miau.ogg'
 };
 const SONIDOS_ESPECIALES = { 'lajefa.png':'lajefa', 'perickko.png':'perickko', 'chocobo.png':'chocobo' };
 const SONIDOS_DISPARO_ESPECIALES = { 'pixelmaster.png':'disparoPixel' };
 
-// TRUCO 3: pool de reproductores por sonido: el móvil nunca se queda sin "cacharros" para sonar
 const POOL = {};
 function reproducir(k, volumen=1, rate=1){
   const ruta = RUTAS_SONIDO[k];
@@ -580,7 +583,7 @@ function reproducir(k, volumen=1, rate=1){
   for(const a of pool){ if(a.ended || a.paused){ el = a; break; } }
   if(!el){
     if(pool.length < 8){ el = new Audio(ruta); pool.push(el); }
-    else { el = pool.shift(); pool.push(el); } // recicla el más antiguo
+    else { el = pool.shift(); pool.push(el); }
   }
   try{
     el.currentTime = 0;
@@ -782,6 +785,15 @@ function disparar(x,y){
   reproducir('disparo');
   const {bx,by} = bocaCanon(x,y);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
+
+  // easter egg: el gato del tejado (sin puntos, solo miau)
+  const gr = gatoRect();
+  if(x>gr.x && x<gr.x+gr.w && y>gr.y && y<gr.y+gr.h){
+    reproducir('miau');
+    efectos.push({tipo:'texto', x:gr.x+gr.w/2, y:gr.y-6, vida:0.8,
+      texto:'¡MIAU! 🐱', color:'#ffb0d0'});
+    return;
+  }
 
   for(const st of coches){
     const c = st.c;
