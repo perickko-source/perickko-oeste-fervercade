@@ -576,6 +576,7 @@ function finCarga(){
 
 // ---------- ESTADO ----------
 let activos = [], efectos = [], agujeros = [];
+let fugas = [], gotas = [], charcos = [];
 let tiroteados = Array(ARCHIVOS.length).fill(0);
 let dispararon = Array(ARCHIVOS.length).fill(0);
 let score = 0, tiempo = 60, balas = 6, racha = 0;
@@ -608,6 +609,13 @@ function gatoRect(){
   const s = Math.max(cv.width/IW, cv.height/IH);
   const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
   return { x: ox + (L.cat-26)*s, y: oy + 92*s, w: 46*s, h: 58*s };
+}
+
+// ---------- EL ABREVADERO (fugas de agua) ----------
+function abrevaderoRect(){
+  const s = Math.max(cv.width/IW, cv.height/IH);
+  const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
+  return { x: ox + (L.troughX-2)*s, y: oy + 564*s, w: 124*s, h: 46*s };
 }
 
 // ---------- REVÓLVER ----------
@@ -669,6 +677,24 @@ function sonidoSeco(f){
   gg.gain.setValueAtTime(0.15, audioCtx.currentTime);
   gg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.08);
   o.connect(gg).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.09);
+}
+function splash(){
+  if(!audioCtx) return;
+  const dur = 0.4;
+  const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate*dur), audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){
+    const t = i/d.length;
+    d[i] = (Math.random()*2-1) * Math.pow(1-t, 1.8) * 0.7;
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const f = audioCtx.createBiquadFilter();
+  f.type='bandpass'; f.frequency.value=1100; f.Q.value=0.7;
+  const gg = audioCtx.createGain();
+  gg.gain.value = 0.5;
+  src.connect(f); f.connect(gg); gg.connect(audioCtx.destination);
+  src.start();
 }
 
 // ---------- SPAWN ----------
@@ -839,6 +865,38 @@ function actualizar(dt){
     }
   }
   actualizarCoches(dt);
+
+  // agua: fugas (10 s) → charco que se seca y desaparece
+  const s = Math.max(cv.width/IW, cv.height/IH);
+  for(let i=fugas.length-1;i>=0;i--){
+    const f = fugas[i];
+    f.vida -= dt;
+    const fuerza = Math.max(0, Math.min(1, f.vida/2));
+    f.acc += dt * 55 * fuerza;
+    while(f.acc >= 1){
+      f.acc -= 1;
+      gotas.push({ x:f.x, y:f.y,
+        vx:(Math.random()-0.5)*90, vy:-(30+Math.random()*90),
+        vida:0.6+Math.random()*0.6 });
+    }
+    f.r = Math.min(45*s, f.r + dt*5*s);
+    if(f.vida<=0){
+      charcos.push({x:f.px, y:f.py, r:f.r, vida:1.5}); // se desvanece y se elimina
+      fugas.splice(i,1);
+    }
+  }
+  for(let i=charcos.length-1;i>=0;i--){
+    charcos[i].vida -= dt;
+    if(charcos[i].vida<=0) charcos.splice(i,1);
+  }
+  for(let i=gotas.length-1;i>=0;i--){
+    const gt = gotas[i];
+    gt.vy += 420*dt;
+    gt.x += gt.vx*dt; gt.y += gt.vy*dt;
+    gt.vida -= dt;
+    if(gt.vida<=0) gotas.splice(i,1);
+  }
+
   for(let i=agujeros.length-1;i>=0;i--){ agujeros[i].vida-=dt; if(agujeros[i].vida<=0) agujeros.splice(i,1); }
   for(let i=efectos.length-1;i>=0;i--){ efectos[i].vida-=dt; if(efectos[i].vida<=0) efectos.splice(i,1); }
   flashBoca = Math.max(0, flashBoca - dt*8);
@@ -882,6 +940,18 @@ function disparar(x,y){
     }
   }
 
+  // easter egg: abrevadero → fuga de agua (máx. 5)
+  const ar = abrevaderoRect();
+  if(x>ar.x && x<ar.x+ar.w && y>ar.y && y<ar.y+ar.h){
+    if(fugas.length < 5){
+      const s = Math.max(cv.width/IW, cv.height/IH);
+      const oy = (cv.height-IH*s)/2;
+      fugas.push({ x, y, px:x, py: oy+655*s, r: 4*s, vida:10, acc:0 });
+      splash();
+      return;
+    }
+  }
+
   for(let i=activos.length-1;i>=0;i--){
     const a = activos[i];
     if(a.fase==='saliendo') continue;
@@ -921,6 +991,29 @@ function dibujarAgujeros(){
     octx.beginPath(); octx.arc(a.x,a.y,3.5,0,Math.PI*2); octx.fill();
     octx.strokeStyle='rgba(0,0,0,0.5)'; octx.lineWidth=2;
     octx.beginPath(); octx.arc(a.x,a.y,5.5,0,Math.PI*2); octx.stroke();
+    octx.globalAlpha = 1;
+  }
+}
+// el agua va DEBAJO de personajes, caballos y deloreans
+function dibujarAgua(){
+  for(const ch of charcos){
+    const a = Math.max(0, Math.min(1, ch.vida/1.5));
+    octx.fillStyle='rgba(70,130,200,'+(0.40*a).toFixed(3)+')';
+    octx.beginPath(); octx.ellipse(ch.x, ch.y, ch.r, ch.r*0.3, 0, 0, Math.PI*2); octx.fill();
+    octx.fillStyle='rgba(170,215,255,'+(0.30*a).toFixed(3)+')';
+    octx.beginPath(); octx.ellipse(ch.x-ch.r*0.2, ch.y-ch.r*0.08, ch.r*0.5, ch.r*0.14, 0, 0, Math.PI*2); octx.fill();
+  }
+  for(const f of fugas){
+    const a = Math.max(0.25, Math.min(1, f.vida/2));
+    octx.fillStyle='rgba(70,130,200,'+(0.40*a).toFixed(3)+')';
+    octx.beginPath(); octx.ellipse(f.px, f.py, f.r, f.r*0.3, 0, 0, Math.PI*2); octx.fill();
+    octx.fillStyle='#20140a';
+    octx.beginPath(); octx.arc(f.x, f.y, 3.5, 0, Math.PI*2); octx.fill();
+  }
+  for(const gt of gotas){
+    octx.globalAlpha = Math.min(1, gt.vida*2);
+    octx.fillStyle='rgba(120,180,240,0.9)';
+    octx.beginPath(); octx.arc(gt.x, gt.y, 2.2, 0, Math.PI*2); octx.fill();
     octx.globalAlpha = 1;
   }
 }
@@ -1084,6 +1177,7 @@ function bucle(t){
   octx.save();
   octx.translate(shx, shy);
   dibujarAgujeros();
+  dibujarAgua();        // agua por debajo de todo lo que se mueve
   dibujarPersonajes();
   dibujarCoches();
   octx.restore();
@@ -1144,6 +1238,7 @@ function bucle(t){
 function empezar(){
   score=0; tiempo=60; balas=6; racha=0;
   activos=[]; efectos=[]; agujeros=[];
+  fugas=[]; gotas=[]; charcos=[];
   coches[0].c=null; coches[0].timer=6;
   coches[1].c=null; coches[1].timer=14;
   coches[2].c=null; coches[2].timer=20;
