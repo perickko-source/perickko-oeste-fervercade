@@ -161,6 +161,7 @@ function calcLayout(){
   hitchX:Math.max(40,CX-526), skullX:Math.max(20,CX-112), agave:Math.max(20,CX-415),
   upC:[CX-U,CX,CX+U], loC:[CX-Lo,CX+Lo],
   wallLant:[CX-232,CX+120], hang:[CX-208,CX+208], postC:[]};
+ L.barrelX = L.barX - 10; // barril grande bajo el cartel BAR
  for(let d=208;d<CX+200;d+=400)L.postC.push(CX-d,CX+d);
  L.postC.sort((a,b)=>a-b);
  SPAWNS.length=0;
@@ -228,11 +229,7 @@ function bakeTown(){
  G.beginPath();G.arc(L.cat+6,110,8,-0.6,1.2);G.stroke();
  G.beginPath();G.ellipse(L.cat,130,11,15,0,-0.9,0.9);G.stroke();
  wood(0,176,IW,192,'#7a5230',26);
- wood(CX-120,152,240,52,'#4a2c14',999);
- P(CX-120,152,240,3,'#2a1808');P(CX-120,201,240,3,'#2a1808');P(CX-120,152,3,52,'#2a1808');P(CX+117,152,3,52,'#2a1808');
- wtextC('SALOON',CX,188,30,'#f2d9a0',6);
- for(let i=0;i<40;i++)P(CX-120+rnd()*240,152+rnd()*52,2,2,'rgba(0,0,0,.25)');
- G.strokeStyle='#9a9aa0';G.lineWidth=4;G.beginPath();G.arc(CX+138,178,10,0.2,2.94);G.stroke();
+ /* (el cartel SALOON se dibuja ahora en la capa dinámica para poder balancearse) */
  L.upC.forEach(c=>winR(c-44,224,88,112));
  wood(18,192,44,180,'#6a2c20',999); wtext('H',32,224,26,'#e8d8b0');wtext('O',32,254,26,'#e8d8b0');
  wtext('T',32,284,26,'#e8d8b0');wtext('E',32,314,26,'#e8d8b0');wtext('L',32,344,26,'#e8d8b0');
@@ -285,6 +282,17 @@ function bakeTown(){
   G.fillStyle='#e0708a';G.beginPath();G.arc(x+7,y-2,4,0,7);G.arc(x+1,y+2,3,0,7);G.fill();
   G.fillStyle='rgba(20,10,5,.3)';G.beginPath();G.ellipse(x-40,y+h,50,8,0,0,7);G.fill()}
  cactus(60,470,130); cactus(IW-100,500,100);
+ /* barril GRANDE bajo el cartel BAR (huevo de pascua) */
+ {
+  const bx0=L.barrelX, by0=520, bw=60, bh=80;
+  lgm(bx0,by0,bw,bh,[[0,'#5a3a1a'],[.35,'#8a6034'],[.7,'#6a4526'],[1,'#3a2410']],false);
+  for(let k=1;k<6;k++)P(bx0+k*10,by0,1,bh,'rgba(20,10,5,.4)');
+  P(bx0,by0+12,bw,5,'#241208');P(bx0,by0+13,bw,1,'rgba(200,200,220,.3)');
+  P(bx0,by0+60,bw,5,'#241208');P(bx0,by0+61,bw,1,'rgba(200,200,220,.3)');
+  G.strokeStyle='rgba(30,15,5,.5)';G.lineWidth=1;
+  for(let k=0;k<5;k++){G.beginPath();G.moveTo(bx0+8+k*10,by0);
+   G.quadraticCurveTo(bx0+6+k*10,by0+40,bx0+8+k*10,by0+80);G.stroke()}
+ }
  lgm(L.crateX,570,48,42,[[0,'#8a6034'],[1,'#5a3a1a']]);P(L.crateX,570,48,4,'#4a2c14');P(L.crateX,606,48,4,'#4a2c14');
  G.strokeStyle='#4a2c14';G.lineWidth=5;G.strokeRect(L.crateX+4,574,40,34);
  G.beginPath();G.moveTo(L.crateX+4,574);G.lineTo(L.crateX+44,608);G.moveTo(L.crateX+44,574);G.lineTo(L.crateX+4,608);G.stroke();
@@ -577,6 +585,9 @@ function finCarga(){
 // ---------- ESTADO ----------
 let activos = [], efectos = [], agujeros = [];
 let fugas = [], gotas = [], charcos = [];
+let gallinas = [];
+let cartel = { ang:0, vel:0, caidas:[] };
+let letrasVolando = [];
 let tiroteados = Array(ARCHIVOS.length).fill(0);
 let dispararon = Array(ARCHIVOS.length).fill(0);
 let score = 0, tiempo = 60, balas = 6, racha = 0;
@@ -604,18 +615,36 @@ function rectSpawn(i){
   return {x:cj.width*d[0]-h*0.39, y:cj.height*d[1]-h/2, w:h*0.78, h:h};
 }
 
-// ---------- EL GATO DEL TEJADO (objetivo secreto) ----------
+// ---------- OBJETOS INTERACTIVOS DEL ESCENARIO ----------
+function escalaEsc(){
+  const s=Math.max(cv.width/IW,cv.height/IH);
+  return {s, ox:(cv.width-IW*s)/2, oy:(cv.height-IH*s)/2};
+}
 function gatoRect(){
-  const s = Math.max(cv.width/IW, cv.height/IH);
-  const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
+  const {s,ox,oy}=escalaEsc();
   return { x: ox + (L.cat-26)*s, y: oy + 92*s, w: 46*s, h: 58*s };
 }
-
-// ---------- EL ABREVADERO (fugas de agua) ----------
 function abrevaderoRect(){
-  const s = Math.max(cv.width/IW, cv.height/IH);
-  const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
+  const {s,ox,oy}=escalaEsc();
   return { x: ox + (L.troughX-2)*s, y: oy + 564*s, w: 124*s, h: 46*s };
+}
+function barrilRect(){
+  const {s,ox,oy}=escalaEsc();
+  return { x: ox + L.barrelX*s, y: oy + 520*s, w: 60*s, h: 80*s };
+}
+function cartelRect(){
+  const {s,ox,oy}=escalaEsc();
+  return { x: ox + (L.CX-120)*s, y: oy + 152*s, w: 240*s, h: 52*s };
+}
+function posicionesLetras(){
+  const {s,ox,oy}=escalaEsc();
+  octx.font='bold '+30*s+'px Georgia, serif';
+  const txt='SALOON'; const arr=[]; const ws=[]; let tot=0;
+  for(const ch of txt){ const w=octx.measureText(ch).width; ws.push(w); tot+=w+6*s; }
+  tot-=6*s;
+  let lx=ox+L.CX*s-tot/2;
+  for(let i=0;i<txt.length;i++){ arr.push({ch:txt[i], i, x:lx+ws[i]/2}); lx+=ws[i]+6*s; }
+  return {arr, s, oy};
 }
 
 // ---------- REVÓLVER ----------
@@ -629,7 +658,7 @@ function bocaCanon(x,y){
   return { ang, bx:gx + Math.cos(ang)*80*S, by:gy + Math.sin(ang)*80*S };
 }
 
-// ---------- SONIDOS (con trucos anti-pérdida en móvil) ----------
+// ---------- SONIDOS ----------
 let audioCtx = null;
 function initAudio(){
   if(!audioCtx){
@@ -678,23 +707,85 @@ function sonidoSeco(f){
   gg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.08);
   o.connect(gg).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.09);
 }
+// splash de agua en 3 capas
 function splash(){
   if(!audioCtx) return;
-  const dur = 0.4;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type='triangle';
+  o.frequency.setValueAtTime(420, t0);
+  o.frequency.exponentialRampToValueAtTime(140, t0+0.18);
+  const og = audioCtx.createGain();
+  og.gain.setValueAtTime(0.9, t0);
+  og.gain.exponentialRampToValueAtTime(0.001, t0+0.22);
+  o.connect(og); og.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+0.25);
+  const dur = 0.7;
   const buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate*dur), audioCtx.sampleRate);
   const d = buf.getChannelData(0);
-  for(let i=0;i<d.length;i++){
-    const t = i/d.length;
-    d[i] = (Math.random()*2-1) * Math.pow(1-t, 1.8) * 0.7;
-  }
-  const src = audioCtx.createBufferSource();
-  src.buffer = buf;
-  const f = audioCtx.createBiquadFilter();
-  f.type='bandpass'; f.frequency.value=1100; f.Q.value=0.7;
-  const gg = audioCtx.createGain();
-  gg.gain.value = 0.5;
-  src.connect(f); f.connect(gg); gg.connect(audioCtx.destination);
-  src.start();
+  for(let i=0;i<d.length;i++){ const t=i/d.length; d[i]=(Math.random()*2-1)*Math.pow(1-t,1.5); }
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+  const f = audioCtx.createBiquadFilter(); f.type='bandpass';
+  f.frequency.setValueAtTime(2500, t0);
+  f.frequency.exponentialRampToValueAtTime(700, t0+dur);
+  f.Q.value = 0.9;
+  const ng = audioCtx.createGain();
+  ng.gain.setValueAtTime(0.8, t0);
+  ng.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+  src.connect(f); f.connect(ng); ng.connect(audioCtx.destination);
+  src.start(t0);
+  const dur2 = 1.2;
+  const buf2 = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate*dur2), audioCtx.sampleRate);
+  const d2 = buf2.getChannelData(0);
+  for(let i=0;i<d2.length;i++){ const t=i/d2.length; d2[i]=(Math.random()*2-1)*(0.35*(1-t)+0.05); }
+  const src2 = audioCtx.createBufferSource(); src2.buffer = buf2;
+  const f2 = audioCtx.createBiquadFilter(); f2.type='highpass'; f2.frequency.value=1500;
+  const ng2 = audioCtx.createGain(); ng2.gain.value = 0.25;
+  src2.connect(f2); f2.connect(ng2); ng2.connect(audioCtx.destination);
+  src2.start(t0+0.05);
+}
+// crujido de madera del cartel SALOON
+function crujido(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(160,t0);
+  o.frequency.linearRampToValueAtTime(90,t0+0.25);
+  const lfo=audioCtx.createOscillator(); lfo.frequency.value=13;
+  const lg=audioCtx.createGain(); lg.gain.value=25;
+  lfo.connect(lg); lg.connect(o.frequency);
+  const g2=audioCtx.createGain();
+  g2.gain.setValueAtTime(0.25,t0);
+  g2.gain.exponentialRampToValueAtTime(0.001,t0+0.3);
+  o.connect(g2); g2.connect(audioCtx.destination);
+  o.start(t0); lfo.start(t0);
+  o.stop(t0+0.32); lfo.stop(t0+0.32);
+}
+// golpe seco de madera (barril)
+function golpeMadera(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  o.type='triangle';
+  o.frequency.setValueAtTime(180,t0);
+  o.frequency.exponentialRampToValueAtTime(70,t0+0.12);
+  const gg=audioCtx.createGain();
+  gg.gain.setValueAtTime(0.7,t0);
+  gg.gain.exponentialRampToValueAtTime(0.001,t0+0.15);
+  o.connect(gg); gg.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0+0.16);
+}
+
+// ---------- GALLINA FUGITIVA ----------
+function soltarGallina(){
+  const dir = Math.random()<0.5?1:-1;
+  gallinas.push({ x: dir>0 ? -60 : cj.width+60, dir,
+    vel: 260+Math.random()*120, t: Math.random()*10 });
+  reproducir('chocobo');
 }
 
 // ---------- SPAWN ----------
@@ -728,7 +819,7 @@ function disparoEnemigo(a){
   }
 }
 
-// ---------- TRÁFICO: lógica + CÁMARA LENTA (deloreans) + SONIDOS ----------
+// ---------- TRÁFICO ----------
 function spriteDe(st){
   if(st.tipo==='coche1')   return [cocheSprite,  cocheRatio,  200, 647];
   if(st.tipo==='coche2')   return [coche2Sprite, coche2Ratio, 200, 647];
@@ -737,8 +828,7 @@ function spriteDe(st){
 }
 function actualizarCoches(dt){
   if(typeof IW === 'undefined') return;
-  const s = Math.max(cv.width/IW, cv.height/IH);
-  const ox = (cv.width-IW*s)/2, oy = (cv.height-IH*s)/2;
+  const {s,ox,oy} = escalaEsc();
   for(const st of coches){
     const [sprite, ratio, hInt, velBase] = spriteDe(st);
     const esCab = esCaballoTipo(st.tipo);
@@ -866,8 +956,25 @@ function actualizar(dt){
   }
   actualizarCoches(dt);
 
-  // agua: fugas (10 s) → charco que se seca y desaparece
-  const s = Math.max(cv.width/IW, cv.height/IH);
+  // cartel SALOON: física de balanceo
+  cartel.vel += -cartel.ang*6*dt;
+  cartel.vel *= Math.max(0, 1-1.1*dt);
+  cartel.ang += cartel.vel*dt;
+  // letras que caen
+  for(let i=letrasVolando.length-1;i>=0;i--){
+    const l=letrasVolando[i];
+    l.vy+=500*dt; l.y+=l.vy*dt; l.rot+=l.vrot*dt; l.vida-=dt;
+    if(l.vida<=0) letrasVolando.splice(i,1);
+  }
+  // gallinas fugitivas
+  for(let i=gallinas.length-1;i>=0;i--){
+    const gll=gallinas[i];
+    gll.x+=gll.dir*gll.vel*dt; gll.t+=dt;
+    if(gll.x<-80||gll.x>cj.width+80) gallinas.splice(i,1);
+  }
+
+  // agua
+  const {s} = escalaEsc();
   for(let i=fugas.length-1;i>=0;i--){
     const f = fugas[i];
     f.vida -= dt;
@@ -881,7 +988,7 @@ function actualizar(dt){
     }
     f.r = Math.min(45*s, f.r + dt*5*s);
     if(f.vida<=0){
-      charcos.push({x:f.px, y:f.py, r:f.r, vida:1.5}); // se desvanece y se elimina
+      charcos.push({x:f.px, y:f.py, r:f.r, vida:1.5});
       fugas.splice(i,1);
     }
   }
@@ -913,7 +1020,7 @@ function disparar(x,y){
   const {bx,by} = bocaCanon(x,y);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
 
-  // easter egg: el gato del tejado (sin puntos, solo miau)
+  // easter egg: el gato del tejado
   const gr = gatoRect();
   if(x>gr.x && x<gr.x+gr.w && y>gr.y && y<gr.y+gr.h){
     reproducir('miau');
@@ -922,6 +1029,7 @@ function disparar(x,y){
     return;
   }
 
+  // objetivos en movimiento: deloreans y jinetes
   for(const st of coches){
     const c = st.c;
     if(c && x > c.x-c.w/2 && x < c.x+c.w/2 && y > c.y-c.h/2 && y < c.y+c.h/2){
@@ -940,12 +1048,57 @@ function disparar(x,y){
     }
   }
 
+  // easter egg: gallina fugitiva (+15)
+  {
+    const {s,oy} = escalaEsc();
+    const gy = oy + 668*s;
+    for(let i=gallinas.length-1;i>=0;i--){
+      const gll=gallinas[i];
+      if(Math.abs(x-gll.x)<22*s && y>gy-46*s && y<gy+4*s){
+        racha++;
+        const mult = multPorRacha(racha);
+        const pts = 15*mult;
+        score += pts;
+        reproducir('chocobo');
+        efectos.push({tipo:'acertado', x:gll.x, y:gy-50*s, vida:0.8,
+          texto:'🐔 +'+pts+(mult>1?' (x'+mult+')':''), color:'#ffffff'});
+        gallinas.splice(i,1);
+        return;
+      }
+    }
+  }
+
+  // easter egg: el barril (a veces suelta gallina)
+  const br = barrilRect();
+  if(x>br.x && x<br.x+br.w && y>br.y && y<br.y+br.h){
+    golpeMadera();
+    if(Math.random()<0.4) soltarGallina();
+    return;
+  }
+
+  // easter egg: cartel SALOON (cruje, se balancea, caen letras)
+  const cr = cartelRect();
+  if(x>cr.x && x<cr.x+cr.w && y>cr.y && y<cr.y+cr.h){
+    crujido();
+    cartel.vel += (Math.random()<0.5?-1:1)*2.5;
+    const restantes=[];
+    for(let i=0;i<6;i++) if(!cartel.caidas.includes(i)) restantes.push(i);
+    if(restantes.length){
+      const idx = restantes[Math.floor(Math.random()*restantes.length)];
+      cartel.caidas.push(idx);
+      const {arr, oy} = posicionesLetras();
+      const l = arr[idx];
+      letrasVolando.push({ch:l.ch, x:l.x, y:oy+182*escalaEsc().s, vy:0,
+        rot:0, vrot:(Math.random()-0.5)*6, vida:2});
+    }
+    return;
+  }
+
   // easter egg: abrevadero → fuga de agua (máx. 5)
   const ar = abrevaderoRect();
   if(x>ar.x && x<ar.x+ar.w && y>ar.y && y<ar.y+ar.h){
     if(fugas.length < 5){
-      const s = Math.max(cv.width/IW, cv.height/IH);
-      const oy = (cv.height-IH*s)/2;
+      const {s,oy} = escalaEsc();
       fugas.push({ x, y, px:x, py: oy+655*s, r: 4*s, vida:10, acc:0 });
       splash();
       return;
@@ -994,7 +1147,40 @@ function dibujarAgujeros(){
     octx.globalAlpha = 1;
   }
 }
-// el agua va DEBAJO de personajes, caballos y deloreans
+// cartel SALOON dinámico (se balancea y pierde letras)
+function dibujarCartel(){
+  const {s,ox,oy} = escalaEsc();
+  const CX=L.CX;
+  octx.save();
+  octx.translate(ox+CX*s, oy+152*s);
+  octx.rotate(cartel.ang);
+  octx.translate(-(ox+CX*s), -(oy+152*s));
+  const X=ox+(CX-120)*s, Y=oy+152*s, Wd=240*s, Hh=52*s;
+  octx.fillStyle='#4a2c14'; octx.fillRect(X,Y,Wd,Hh);
+  octx.fillStyle='#2a1808';
+  octx.fillRect(X,Y,Wd,3*s); octx.fillRect(X,Y+Hh-3*s,Wd,3*s);
+  octx.fillRect(X,Y,3*s,Hh); octx.fillRect(X+Wd-3*s,Y,3*s,Hh);
+  const {arr} = posicionesLetras();
+  octx.font='bold '+30*s+'px Georgia, serif';
+  octx.fillStyle='#f2d9a0';
+  octx.textAlign='center'; octx.textBaseline='alphabetic';
+  for(const l of arr){
+    if(!cartel.caidas.includes(l.i)) octx.fillText(l.ch, l.x, Y+36*s);
+  }
+  octx.restore();
+  // letras cayendo
+  for(const l of letrasVolando){
+    octx.save();
+    octx.translate(l.x,l.y);
+    octx.rotate(l.rot);
+    octx.globalAlpha=Math.min(1,l.vida);
+    octx.font='bold '+30*s+'px Georgia, serif';
+    octx.fillStyle='#f2d9a0';
+    octx.textAlign='center'; octx.textBaseline='middle';
+    octx.fillText(l.ch,0,0);
+    octx.restore();
+  }
+}
 function dibujarAgua(){
   for(const ch of charcos){
     const a = Math.max(0, Math.min(1, ch.vida/1.5));
@@ -1015,6 +1201,33 @@ function dibujarAgua(){
     octx.fillStyle='rgba(120,180,240,0.9)';
     octx.beginPath(); octx.arc(gt.x, gt.y, 2.2, 0, Math.PI*2); octx.fill();
     octx.globalAlpha = 1;
+  }
+}
+function dibujarGallinas(){
+  const {s,oy} = escalaEsc();
+  for(const gll of gallinas){
+    const u=s, x=gll.x, y=oy+668*s;
+    octx.save();
+    octx.translate(x,y);
+    octx.scale(gll.dir*u, u);
+    const step = Math.sin(gll.t*18);
+    octx.strokeStyle='#d98a2a'; octx.lineWidth=2;
+    octx.beginPath(); octx.moveTo(-4,-14); octx.lineTo(-4+step*4,0); octx.stroke();
+    octx.beginPath(); octx.moveTo(4,-14); octx.lineTo(4-step*4,0); octx.stroke();
+    octx.fillStyle='#f5f0e6';
+    octx.beginPath(); octx.ellipse(0,-22,14,10,0,0,Math.PI*2); octx.fill();
+    octx.beginPath(); octx.ellipse(-12,-26,6,4,-0.5,0,Math.PI*2); octx.fill();
+    octx.fillStyle='#e0d8c8';
+    octx.beginPath(); octx.ellipse(-2,-22,7,5,0.3+step*0.2,0,Math.PI*2); octx.fill();
+    octx.fillStyle='#f5f0e6';
+    octx.beginPath(); octx.arc(10,-34,6,0,Math.PI*2); octx.fill();
+    octx.fillStyle='#cc3333';
+    octx.beginPath(); octx.arc(9,-40,2.5,0,Math.PI*2); octx.arc(12,-40,2.5,0,Math.PI*2); octx.fill();
+    octx.fillStyle='#e8912a';
+    octx.beginPath(); octx.moveTo(15,-34); octx.lineTo(21,-32); octx.lineTo(15,-30); octx.closePath(); octx.fill();
+    octx.fillStyle='#222';
+    octx.beginPath(); octx.arc(11,-35,1.4,0,Math.PI*2); octx.fill();
+    octx.restore();
   }
 }
 function dibujarPersonajes(){
@@ -1177,8 +1390,10 @@ function bucle(t){
   octx.save();
   octx.translate(shx, shy);
   dibujarAgujeros();
-  dibujarAgua();        // agua por debajo de todo lo que se mueve
+  dibujarCartel();
+  dibujarAgua();
   dibujarPersonajes();
+  dibujarGallinas();
   dibujarCoches();
   octx.restore();
 
@@ -1239,6 +1454,8 @@ function empezar(){
   score=0; tiempo=60; balas=6; racha=0;
   activos=[]; efectos=[]; agujeros=[];
   fugas=[]; gotas=[]; charcos=[];
+  gallinas=[]; letrasVolando=[];
+  cartel={ang:0, vel:0, caidas:[]};
   coches[0].c=null; coches[0].timer=6;
   coches[1].c=null; coches[1].timer=14;
   coches[2].c=null; coches[2].timer=20;
