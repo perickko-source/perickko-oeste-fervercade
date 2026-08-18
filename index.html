@@ -504,7 +504,6 @@ caballo2ImgEl.addEventListener('load', ()=>{ if(caballo2ImgEl.naturalWidth>0)
   caballo2Ratio = caballo2ImgEl.naturalWidth / caballo2ImgEl.naturalHeight; });
 caballo2ImgEl.src = 'wuantiles-a-caballo.webp';
 
-// ratio de la gallina (solo para medir; la animación vive en el <img>)
 let gallinaRatio = 232/300;
 { const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0)
   gallinaRatio = img.naturalWidth/img.naturalHeight; }; img.src='gallina.webp'; }
@@ -538,6 +537,7 @@ let posters = [], postersCayendo = [];
 let tiroteados = Array(ARCHIVOS.length).fill(0);
 let dispararon = Array(ARCHIVOS.length).fill(0);
 let score = 0, tiempo = 60, balas = 6, racha = 0;
+let balasInfinitas = false, gatosSeguidos = 0;
 let tPrevio = 0, spawnTimer = 0, flashBoca = 0;
 let dano = 0, shake = 0;
 let coches = [
@@ -639,6 +639,20 @@ function sonidoSeco(f){
   gg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.08);
   o.connect(gg).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.09);
 }
+function sonidoPremio(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  [523,659,784,1047].forEach((f,i)=>{
+    const o=audioCtx.createOscillator(); o.type='triangle'; o.frequency.value=f;
+    const gg=audioCtx.createGain();
+    gg.gain.setValueAtTime(0.0001, t0+i*0.09);
+    gg.gain.exponentialRampToValueAtTime(0.3, t0+i*0.09+0.02);
+    gg.gain.exponentialRampToValueAtTime(0.001, t0+i*0.09+0.25);
+    o.connect(gg); gg.connect(audioCtx.destination);
+    o.start(t0+i*0.09); o.stop(t0+i*0.09+0.3);
+  });
+}
 function splash(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -704,7 +718,6 @@ function sonidoPapel(){
   const g2=audioCtx.createGain(); g2.gain.value=0.4;
   src.connect(f); f.connect(g2); g2.connect(audioCtx.destination); src.start(t0);
 }
-// suelta una gallina ANIMADA (elemento <img> en el DOM)
 function soltarGallina(){
   const dir = Math.random()<0.5?1:-1;
   const el = document.createElement('img');
@@ -851,7 +864,6 @@ function actualizar(dt){
   for(let i=postersCayendo.length-1;i>=0;i--){ const f=postersCayendo[i];
     f.vy+=600*dt; f.y+=f.vy*dt; f.rot+=f.vrot*dt; if(f.y>cj.height+120) postersCayendo.splice(i,1); }
 
-  // gallinas animadas (elementos <img>)
   { const {s,oy}=escalaEsc(); const gy=oy+668*s;
     for(let i=gallinas.length-1;i>=0;i--){ const gll=gallinas[i];
       gll.x += gll.dir*gll.vel*dt; gll.t += dt;
@@ -885,18 +897,28 @@ function actualizar(dt){
 
 function disparar(x,y){
   if(!jugando) return;
-  if(balas<=0){ sonidoSeco(200); return; }
-  balas--; flashBoca = 1;
+  if(!balasInfinitas && balas<=0){ sonidoSeco(200); return; }
+  if(!balasInfinitas) balas--;
+  flashBoca = 1;
   reproducir('disparo');
   const {bx,by} = bocaCanon(x,y);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
 
+  // GATO: 5 miaus seguidos = balas infinitas (sin mostrar contador)
   const gr = gatoRect();
   if(x>gr.x && x<gr.x+gr.w && y>gr.y && y<gr.y+gr.h){
     reproducir('miau');
-    efectos.push({tipo:'texto', x:gr.x+gr.w/2, y:gr.y-6, vida:0.8, texto:'¡MIAU! 🐱', color:'#ffb0d0'});
+    gatosSeguidos++;
+    if(gatosSeguidos>=5 && !balasInfinitas){
+      balasInfinitas = true;
+      sonidoPremio();
+      efectos.push({tipo:'texto', x:gr.x+gr.w/2, y:gr.y-26, vida:1.5, texto:'🐱 ¡BALAS INFINITAS!', color:'#8affff'});
+    } else if(!balasInfinitas){
+      efectos.push({tipo:'texto', x:gr.x+gr.w/2, y:gr.y-6, vida:0.8, texto:'¡MIAU! 🐱', color:'#ffb0d0'});
+    }
     return;
   }
+  gatosSeguidos = 0;
 
   for(const st of coches){
     const c = st.c;
@@ -910,7 +932,6 @@ function disparar(x,y){
     }
   }
 
-  // gallina fugitiva (imagen animada)
   { const {s,oy}=escalaEsc(); const gy=oy+668*s;
     const h=46*s, w=h*gallinaRatio;
     for(let i=gallinas.length-1;i>=0;i--){ const gll=gallinas[i];
@@ -1168,7 +1189,9 @@ function dibujarHUD(){
   O.textAlign='left'; O.fillText('⭐ Puntos: '+score, 15, 19);
   const mult=multPorRacha(racha); if(mult>1){ O.fillStyle='#ff9a4a'; O.fillText('🔥 x'+mult,230,19); }
   O.fillStyle='#ffd97a'; O.textAlign='center'; O.fillText('⏱ '+Math.ceil(tiempo)+'s', fx.width/2, 19);
-  O.textAlign='right'; let m=''; for(let i=0;i<6;i++) m+= i<balas?'🔸':'·'; O.fillText(m, fx.width-15, 19);
+  O.textAlign='right';
+  if(balasInfinitas){ O.fillStyle='#8affff'; O.font='bold 26px Georgia'; O.fillText('∞', fx.width-15, 20); }
+  else { let m=''; for(let i=0;i<6;i++) m+= i<balas?'🔸':'·'; O.fillText(m, fx.width-15, 19); }
 }
 function dibujarMira(){
   const {x,y}=raton; O.strokeStyle='#fff'; O.lineWidth=2; const r=18;
@@ -1232,6 +1255,7 @@ function bucle(t){
 
 function empezar(){
   score=0; tiempo=60; balas=6; racha=0;
+  balasInfinitas=false; gatosSeguidos=0;
   activos=[]; efectos=[]; agujeros=[]; fugas=[]; gotas=[]; charcos=[];
   for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
   gallinas=[]; letrasVolando=[]; letrasBARVolando=[]; postersCayendo=[];
