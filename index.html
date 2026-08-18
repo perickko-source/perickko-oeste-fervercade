@@ -11,6 +11,7 @@
   #juego { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:2;
     cursor:none; touch-action:none; }
   #caballoImg, #caballo2Img { position:fixed; left:0; top:0; z-index:3; display:none; pointer-events:none; }
+  .gallina { position:fixed; left:0; top:0; z-index:3; display:block; pointer-events:none; }
   #fx { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:4;
     pointer-events:none; }
   #aviso { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -255,7 +256,6 @@ function bakeTown(){
  P(CX-56,436,112,164,'#160a05');
  [CX-52,CX+4].forEach(x=>{wood(x,470,52,90,'#7a5230',13);
   P(x,470,52,4,'#3e2812');P(x,556,52,4,'#3e2812');P(x,478,4,8,'#241208');P(x,540,4,8,'#241208')});
- /* (los pósters WANTED se dibujan en la capa dinámica) */
  wood(0,592,IW,8,'#8a6034',40,false);
  P(CX-64,600,128,7,'#8a6034');P(CX-72,607,144,7,'#6a4526');
  lgm(0,600,IW,120,[[0,'#c08a52'],[.4,'#a06a3c'],[1,'#6a4426']]);
@@ -460,7 +460,7 @@ const ARCHIVOS = ['chocobo.png','danifm.png','daniju.png','eljefe.png','gunner.p
 const NOMBRES = ['Chocobo','Danifm','Daniju','El Jefe','Gunner','La Jefa',
   'Mario','Minato','Perickko','Pixelmaster','Toni','Wuantiles'];
 const RATIO_IMG = 842/1264;
-const EMOJIS_RESERVA = ['🐔','','️','','','😎','','','','','',''];
+const EMOJIS_RESERVA = ['','','️','','','😎','','','','','',''];
 const PENALIZACION = 10;
 
 const personajes = [];
@@ -503,6 +503,11 @@ let caballo2Ratio = 232/300;
 caballo2ImgEl.addEventListener('load', ()=>{ if(caballo2ImgEl.naturalWidth>0)
   caballo2Ratio = caballo2ImgEl.naturalWidth / caballo2ImgEl.naturalHeight; });
 caballo2ImgEl.src = 'wuantiles-a-caballo.webp';
+
+// ratio de la gallina (solo para medir; la animación vive en el <img>)
+let gallinaRatio = 232/300;
+{ const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0)
+  gallinaRatio = img.naturalWidth/img.naturalHeight; }; img.src='gallina.webp'; }
 
 function finCarga(){
   if(++listos === ARCHIVOS.length){
@@ -699,9 +704,15 @@ function sonidoPapel(){
   const g2=audioCtx.createGain(); g2.gain.value=0.4;
   src.connect(f); f.connect(g2); g2.connect(audioCtx.destination); src.start(t0);
 }
+// suelta una gallina ANIMADA (elemento <img> en el DOM)
 function soltarGallina(){
   const dir = Math.random()<0.5?1:-1;
-  gallinas.push({ x: dir>0 ? -60 : cj.width+60, dir, vel: 260+Math.random()*120, t: Math.random()*10 });
+  const el = document.createElement('img');
+  el.src = 'gallina.webp';
+  el.alt = '';
+  el.className = 'gallina';
+  document.body.appendChild(el);
+  gallinas.push({ x: dir>0 ? -60 : cj.width+60, dir, vel: 260+Math.random()*120, t: Math.random()*10, el });
   reproducir('chocobo');
 }
 
@@ -839,8 +850,20 @@ function actualizar(dt){
     l.vy+=500*dt; l.y+=l.vy*dt; l.rot+=l.vrot*dt; l.vida-=dt; if(l.vida<=0) letrasBARVolando.splice(i,1); }
   for(let i=postersCayendo.length-1;i>=0;i--){ const f=postersCayendo[i];
     f.vy+=600*dt; f.y+=f.vy*dt; f.rot+=f.vrot*dt; if(f.y>cj.height+120) postersCayendo.splice(i,1); }
-  for(let i=gallinas.length-1;i>=0;i--){ const gll=gallinas[i];
-    gll.x+=gll.dir*gll.vel*dt; gll.t+=dt; if(gll.x<-80||gll.x>cj.width+80) gallinas.splice(i,1); }
+
+  // gallinas animadas (elementos <img>)
+  { const {s,oy}=escalaEsc(); const gy=oy+668*s;
+    for(let i=gallinas.length-1;i>=0;i--){ const gll=gallinas[i];
+      gll.x += gll.dir*gll.vel*dt; gll.t += dt;
+      const h=46*s, w=h*gallinaRatio;
+      const flip = gll.dir===1 ? -1 : 1;
+      const bob = Math.sin(gll.t*18)*2*s;
+      gll.el.style.width = w+'px';
+      gll.el.style.height = h+'px';
+      gll.el.style.left = (gll.x - w/2)+'px';
+      gll.el.style.top = (gy - h + bob)+'px';
+      gll.el.style.transform = flip===-1 ? 'scaleX(-1)' : 'none';
+      if(gll.x<-80 || gll.x>cj.width+80){ gll.el.remove(); gallinas.splice(i,1); } } }
 
   const {s} = escalaEsc();
   for(let i=fugas.length-1;i>=0;i--){ const f=fugas[i];
@@ -887,16 +910,18 @@ function disparar(x,y){
     }
   }
 
+  // gallina fugitiva (imagen animada)
   { const {s,oy}=escalaEsc(); const gy=oy+668*s;
+    const h=46*s, w=h*gallinaRatio;
     for(let i=gallinas.length-1;i>=0;i--){ const gll=gallinas[i];
-      if(Math.abs(x-gll.x)<22*s && y>gy-46*s && y<gy+4*s){
+      if(Math.abs(x-gll.x)<w/2 && y>gy-h && y<gy+4*s){
         racha++; const mult=multPorRacha(racha); const pts=15*mult; score+=pts;
         reproducir('chocobo');
-        efectos.push({tipo:'acertado', x:gll.x, y:gy-50*s, vida:0.8, texto:'🐔 +'+pts+(mult>1?' (x'+mult+')':''), color:'#ffffff'});
-        gallinas.splice(i,1); return; } } }
+        efectos.push({tipo:'acertado', x:gll.x, y:gy-h, vida:0.8, texto:'🐔 +'+pts+(mult>1?' (x'+mult+')':''), color:'#ffffff'});
+        gll.el.remove(); gallinas.splice(i,1); return; } } }
 
   const br = barrilRect();
-  if(x>br.x && x<br.x+br.w && y>br.y && y<br.y+br.h){ golpeMadera(); if(Math.random()<0.4) soltarGallina(); return; }
+  if(x>br.x && x<br.x+br.w && y>br.y && y<br.y+br.h){ golpeMadera(); soltarGallina(); return; }
 
   const cr = cartelRect();
   if(x>cr.x && x<cr.x+cr.w && y>cr.y && y<cr.y+cr.h){
@@ -918,16 +943,14 @@ function disparar(x,y){
     return;
   }
 
-  // pósters WANTED: caen y revelan a un amigo
   for(const p of posters){
     const r = posterRect(p);
     if(x>r.x && x<r.x+r.w && y>r.y && y<r.y+r.h){
       sonidoPapel();
       const nf = Math.floor(Math.random()*personajes.length);
-      if(p.state=='hanging'){
-        p.state='revealed'; p.friend=nf;
-        postersCayendo.push({x:r.x, y:r.y, rot:p.rot, vy:0, vrot:(Math.random()-0.5)*6});
-      } else { p.friend=nf; }
+      if(p.state=='hanging'){ p.state='revealed'; p.friend=nf;
+        postersCayendo.push({x:r.x, y:r.y, rot:p.rot, vy:0, vrot:(Math.random()-0.5)*6}); }
+      else { p.friend=nf; }
       efectos.push({tipo:'texto', x:r.x+r.w/2, y:r.y-6, vida:0.9, texto:'👀 SE BUSCA: '+NOMBRES[nf], color:'#e8dcc0'});
       return;
     }
@@ -994,13 +1017,10 @@ function dibujarPosters(){
       octx.fillStyle='#3a2a18'; octx.font='bold '+9*s+'px Georgia, serif';
       octx.fillText('SE BUSCA', 28*s, 12*s);
       const sp = personajes[p.friend] && personajes[p.friend].sprite;
-      if(sp){
-        const bw=40*s, bh=40*s, ratio=sp.width/sp.height;
+      if(sp){ const bw=40*s, bh=40*s, ratio=sp.width/sp.height;
         let dw=bw, dh=bw/ratio; if(dh>bh){ dh=bh; dw=bh*ratio; }
-        octx.drawImage(sp, 28*s-dw/2, 16*s+(bh-dh)/2, dw, dh);
-      } else {
-        octx.fillStyle='#6a563a'; octx.beginPath(); octx.arc(28*s,36*s,14*s,0,7); octx.fill();
-      }
+        octx.drawImage(sp, 28*s-dw/2, 16*s+(bh-dh)/2, dw, dh); }
+      else { octx.fillStyle='#6a563a'; octx.beginPath(); octx.arc(28*s,36*s,14*s,0,7); octx.fill(); }
       octx.fillStyle='#3a2a18'; octx.font='bold '+7*s+'px Georgia, serif';
       octx.fillText(NOMBRES[p.friend].toUpperCase(), 28*s, 64*s);
     }
@@ -1067,25 +1087,6 @@ function dibujarAgua(){
   for(const gt of gotas){ octx.globalAlpha=Math.min(1,gt.vida*2);
     octx.fillStyle='rgba(120,180,240,0.9)'; octx.beginPath(); octx.arc(gt.x,gt.y,2.2,0,Math.PI*2); octx.fill();
     octx.globalAlpha=1; }
-}
-function dibujarGallinas(){
-  const {s,oy}=escalaEsc();
-  for(const gll of gallinas){
-    const u=s, x=gll.x, y=oy+668*s;
-    octx.save(); octx.translate(x,y); octx.scale(gll.dir*u,u);
-    const step=Math.sin(gll.t*18);
-    octx.strokeStyle='#d98a2a'; octx.lineWidth=2;
-    octx.beginPath(); octx.moveTo(-4,-14); octx.lineTo(-4+step*4,0); octx.stroke();
-    octx.beginPath(); octx.moveTo(4,-14); octx.lineTo(4-step*4,0); octx.stroke();
-    octx.fillStyle='#f5f0e6'; octx.beginPath(); octx.ellipse(0,-22,14,10,0,0,Math.PI*2); octx.fill();
-    octx.beginPath(); octx.ellipse(-12,-26,6,4,-0.5,0,Math.PI*2); octx.fill();
-    octx.fillStyle='#e0d8c8'; octx.beginPath(); octx.ellipse(-2,-22,7,5,0.3+step*0.2,0,Math.PI*2); octx.fill();
-    octx.fillStyle='#f5f0e6'; octx.beginPath(); octx.arc(10,-34,6,0,Math.PI*2); octx.fill();
-    octx.fillStyle='#cc3333'; octx.beginPath(); octx.arc(9,-40,2.5,0,Math.PI*2); octx.arc(12,-40,2.5,0,Math.PI*2); octx.fill();
-    octx.fillStyle='#e8912a'; octx.beginPath(); octx.moveTo(15,-34); octx.lineTo(21,-32); octx.lineTo(15,-30); octx.closePath(); octx.fill();
-    octx.fillStyle='#222'; octx.beginPath(); octx.arc(11,-35,1.4,0,Math.PI*2); octx.fill();
-    octx.restore();
-  }
 }
 function dibujarPersonajes(){
   for(const a of activos){
@@ -1192,7 +1193,6 @@ function bucle(t){
   dibujarPosters();
   dibujarAgua();
   dibujarPersonajes();
-  dibujarGallinas();
   dibujarCoches();
   octx.restore();
 
@@ -1208,6 +1208,8 @@ function bucle(t){
       if(score>0 && (!record || score>record.score)){ esperandoNombre=true; nombreRec.value=nombrePrev; recordEl.style.display='flex'; } }
     if(esTouch) btnRecarga.style.display='none';
     caballoImgEl.style.display='none'; caballo2ImgEl.style.display='none';
+    for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
+    gallinas=[];
     fctx.fillStyle='rgba(0,0,0,0.6)'; fctx.fillRect(0,0,fx.width,fx.height);
     fctx.fillStyle='#ffd97a'; fctx.textAlign='center';
     fctx.font='bold 42px Georgia'; fctx.fillText('🤠 ¡SE ACABÓ EL TIEMPO!', fx.width/2, fx.height/2-95);
@@ -1231,6 +1233,7 @@ function bucle(t){
 function empezar(){
   score=0; tiempo=60; balas=6; racha=0;
   activos=[]; efectos=[]; agujeros=[]; fugas=[]; gotas=[]; charcos=[];
+  for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
   gallinas=[]; letrasVolando=[]; letrasBARVolando=[]; postersCayendo=[];
   cartel={ang:0,vel:0,caidas:[]}; cartelBAR={ang:0,vel:0,caidas:[]};
   posters=[ {off:-288, rot:(Math.random()-.5)*.06, state:'hanging', friend:-1},
