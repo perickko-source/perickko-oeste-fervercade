@@ -520,6 +520,7 @@ let crateStage = 0, crateOpen = false;
 let relojes = [], monedas = [];
 let fuegos = { launch:0, rockets:[], parts:[] };
 let freeze = 0;
+let lunaWink = 0, lunaCd = 0, estrellaFugaz = null;
 let tiroteados = Array(ARCHIVOS.length).fill(0);
 let dispararon = Array(ARCHIVOS.length).fill(0);
 let score = 0, tiempo = 60, balas = 6, racha = 0;
@@ -557,6 +558,8 @@ function cartelRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX-120)*s, 
 function barRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.barX-75)*s, y:oy+406*s, w:150*s, h:60*s }; }
 function posterRect(p){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX+p.off)*s, y:oy+452*s, w:56*s, h:72*s }; }
 function crateRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+L.crateX*s, y:oy+570*s, w:48*s, h:42*s }; }
+/* LUNA real: círculo blanco con cráteres, arriba a la IZQUIERDA (150,60) */
+function lunaRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(150-20)*s, y:oy+(60-20)*s, w:40*s, h:40*s }; }
 
 function posicionesLetras(){
   const {s,ox,oy}=escalaEsc();
@@ -640,6 +643,15 @@ function sonidoPremio(){
     o.start(t0+i*0.09); o.stop(t0+i*0.09+0.3);
   });
 }
+function sonidoLuna(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  [660,880,990].forEach((f,i)=>{ const o=audioCtx.createOscillator(); o.type='sine'; o.frequency.value=f;
+    const g=audioCtx.createGain(); g.gain.setValueAtTime(0.0001,t0+i*0.06);
+    g.gain.exponentialRampToValueAtTime(0.2,t0+i*0.06+0.02); g.gain.exponentialRampToValueAtTime(0.001,t0+i*0.06+0.3);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t0+i*0.06); o.stop(t0+i*0.06+0.32); });
+}
 function sonidoTick(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -649,7 +661,6 @@ function sonidoTick(){
     g.gain.exponentialRampToValueAtTime(0.2,t0+i*0.08+0.01); g.gain.exponentialRampToValueAtTime(0.001,t0+i*0.08+0.1);
     o.connect(g); g.connect(audioCtx.destination); o.start(t0+i*0.08); o.stop(t0+i*0.08+0.12); });
 }
-/* moneda recogida: brillo brillante tipo "coin" */
 function sonidoMoneda(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -659,7 +670,6 @@ function sonidoMoneda(){
     g.gain.exponentialRampToValueAtTime(0.25,t0+i*0.07+0.01); g.gain.exponentialRampToValueAtTime(0.001,t0+i*0.07+0.15);
     o.connect(g); g.connect(audioCtx.destination); o.start(t0+i*0.07); o.stop(t0+i*0.07+0.18); });
 }
-/* monedas saliendo: tique-tique de monedas derramándose */
 function sonidoDerrameMonedas(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -779,6 +789,11 @@ function soltarMonedas(){
   }
   sonidoDerrameMonedas();
 }
+function spawnEstrellaFugaz(){
+  const {s,ox,oy}=escalaEsc();
+  const mx=ox+150*s, my=oy+60*s;
+  estrellaFugaz = { x:mx, y:my, vx:-(200+Math.random()*150)*s, vy:(40+Math.random()*50)*s, vida:4 };
+}
 function launchRocket(){
   const x=Math.random()*cj.width;
   const ty=cj.height*(0.15+Math.random()*0.35);
@@ -893,6 +908,11 @@ function actualizar(dt){
   flashBoca = Math.max(0, flashBoca - dt*8);
   dano = Math.max(0, dano - dt*2);
   shake = Math.max(0, shake - dt*3);
+  lunaWink = Math.max(0, lunaWink - dt);
+  lunaCd = Math.max(0, lunaCd - dt);
+  if(estrellaFugaz){ const ef=estrellaFugaz;
+    ef.x+=ef.vx*dt; ef.y+=ef.vy*dt; ef.vida-=dt;
+    if(ef.vida<=0 || ef.x<-50 || ef.y>cj.height+50) estrellaFugaz=null; }
 
   if(freeze>0){
     freeze-=dt;
@@ -991,6 +1011,28 @@ function disparar(x,y){
   const {bx,by} = bocaCanon(x,y);
   const s = Math.max(cv.width/IW, cv.height/IH);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
+
+  // estrella fugaz (cazable +50)
+  if(estrellaFugaz){
+    const ef=estrellaFugaz;
+    if(Math.abs(x-ef.x)<24*s && Math.abs(y-ef.y)<24*s){
+      score+=50; sonidoPremio();
+      efectos.push({tipo:'texto', x:ef.x, y:ef.y-14, vida:0.9, texto:'⭐ +50', color:'#fff6d8'});
+      estrellaFugaz=null;
+      return;
+    }
+  }
+
+  // LUNA: guiña y lanza estrella fugaz
+  const lr = lunaRect();
+  if(x>lr.x && x<lr.x+lr.w && y>lr.y && y<lr.y+lr.h){
+    if(lunaCd<=0){
+      lunaWink=1.5; lunaCd=10;
+      spawnEstrellaFugaz();
+      sonidoLuna();
+    }
+    return;
+  }
 
   const gr = gatoRect();
   if(x>gr.x && x<gr.x+gr.w && y>gr.y && y<gr.y+gr.h){
@@ -1128,6 +1170,32 @@ function dibujarAgujeros(){
     octx.strokeStyle='rgba(0,0,0,0.5)'; octx.lineWidth=2; octx.beginPath(); octx.arc(a.x,a.y,5.5,0,Math.PI*2); octx.stroke();
     octx.globalAlpha = 1;
   }
+}
+function dibujarLuna(){
+  if(lunaWink<=0) return;
+  const {s,ox,oy}=escalaEsc();
+  const mx=ox+150*s, my=oy+60*s;
+  const a=Math.min(1,lunaWink);
+  octx.save(); octx.globalAlpha=a;
+  octx.strokeStyle='#5a4a3a'; octx.lineWidth=2*s; octx.lineCap='round';
+  octx.fillStyle='#5a4a3a';
+  octx.beginPath(); octx.arc(mx-6*s,my-3*s,2.5*s,0,Math.PI*2); octx.fill();
+  octx.beginPath(); octx.arc(mx+6*s,my-3*s,3*s,0.15*Math.PI,0.85*Math.PI); octx.stroke();
+  octx.beginPath(); octx.arc(mx,my+4*s,6*s,0.15*Math.PI,0.85*Math.PI); octx.stroke();
+  octx.restore();
+}
+function dibujarEstrellaFugaz(){
+  if(!estrellaFugaz) return;
+  const ef=estrellaFugaz;
+  octx.save();
+  octx.strokeStyle='rgba(255,246,216,0.6)'; octx.lineWidth=3;
+  octx.beginPath(); octx.moveTo(ef.x-ef.vx*0.15, ef.y-ef.vy*0.15); octx.lineTo(ef.x,ef.y); octx.stroke();
+  octx.fillStyle='#fff6d8';
+  octx.beginPath();
+  octx.moveTo(ef.x,ef.y-8); octx.lineTo(ef.x+3,ef.y-3); octx.lineTo(ef.x+8,ef.y); octx.lineTo(ef.x+3,ef.y+3);
+  octx.lineTo(ef.x,ef.y+8); octx.lineTo(ef.x-3,ef.y+3); octx.lineTo(ef.x-8,ef.y); octx.lineTo(ef.x-3,ef.y-3);
+  octx.closePath(); octx.fill();
+  octx.restore();
 }
 function drawPosterBase(s){
   octx.fillStyle='#e8dcc0'; octx.fillRect(0,0,56*s,72*s);
@@ -1373,6 +1441,8 @@ function bucle(t){
   octx.clearRect(0,0,cj.width,cj.height);
   octx.save(); octx.translate(shx,shy);
   dibujarAgujeros();
+  dibujarLuna();
+  dibujarEstrellaFugaz();
   dibujarCaja();
   dibujarItems();
   dibujarCartel(now);
@@ -1423,6 +1493,7 @@ function empezar(){
   balasInfinitas=false; gatosSeguidos=0;
   crateStage=0; crateOpen=false; relojes=[]; monedas=[];
   fuegos={launch:0,rockets:[],parts:[]}; freeze=0;
+  lunaWink=0; lunaCd=0; estrellaFugaz=null;
   activos=[]; efectos=[]; agujeros=[]; fugas=[]; gotas=[]; charcos=[];
   for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
   gallinas=[]; letrasVolando=[]; letrasBARVolando=[]; postersCayendo=[];
