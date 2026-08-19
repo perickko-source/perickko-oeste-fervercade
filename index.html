@@ -649,6 +649,7 @@ function sonidoTick(){
     g.gain.exponentialRampToValueAtTime(0.2,t0+i*0.08+0.01); g.gain.exponentialRampToValueAtTime(0.001,t0+i*0.08+0.1);
     o.connect(g); g.connect(audioCtx.destination); o.start(t0+i*0.08); o.stop(t0+i*0.08+0.12); });
 }
+/* moneda recogida: brillo brillante tipo "coin" */
 function sonidoMoneda(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -657,6 +658,23 @@ function sonidoMoneda(){
     const g=audioCtx.createGain(); g.gain.setValueAtTime(0.0001,t0+i*0.07);
     g.gain.exponentialRampToValueAtTime(0.25,t0+i*0.07+0.01); g.gain.exponentialRampToValueAtTime(0.001,t0+i*0.07+0.15);
     o.connect(g); g.connect(audioCtx.destination); o.start(t0+i*0.07); o.stop(t0+i*0.07+0.18); });
+}
+/* monedas saliendo: tique-tique de monedas derramándose */
+function sonidoDerrameMonedas(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  for(let i=0;i<6;i++){
+    const f=1200+Math.random()*900;
+    const o=audioCtx.createOscillator(); o.type='triangle'; o.frequency.value=f;
+    const g=audioCtx.createGain();
+    const ts=t0+i*0.05+Math.random()*0.03;
+    g.gain.setValueAtTime(0.0001,ts);
+    g.gain.exponentialRampToValueAtTime(0.2,ts+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,ts+0.12);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(ts); o.stop(ts+0.14);
+  }
 }
 function sonidoExplosion(){
   if(!audioCtx) return;
@@ -736,21 +754,18 @@ function soltarGallina(){
   gallinas.push({ x: dir>0 ? -60 : cj.width+60, dir, vel: 260+Math.random()*120, t: Math.random()*10, el });
   reproducir('chocobo');
 }
-/* los relojes SALEN de la caja con un pop y caen esparcidos */
 function soltarRelojes(){
   const {s,ox,oy}=escalaEsc();
   const cx=ox+(L.crateX+24)*s, cy=oy+585*s;
   const n=5+Math.floor(Math.random()*2);
   for(let i=0;i<n;i++){
     const dir = Math.random()<0.5?-1:1;
-    relojes.push({
-      x:cx, y:cy,
+    relojes.push({ x:cx, y:cy,
       vx: dir*(60+Math.random()*170)*s,
       vy: -(240+Math.random()*180)*s,
       gy: oy+(600+Math.random()*40)*s,
       rot:0, vrot:(Math.random()-0.5)*12,
-      settled:false, t:Math.random()*10
-    });
+      settled:false, t:Math.random()*10 });
   }
 }
 function soltarMonedas(){
@@ -762,6 +777,7 @@ function soltarMonedas(){
     wx=Math.max(20,Math.min(cj.width-20,wx)); wy=Math.max(oy+560*s,Math.min(cj.height-20,wy));
     monedas.push({x:wx,y:wy,vida:5+Math.random()*2,t:Math.random()*10});
   }
+  sonidoDerrameMonedas();
 }
 function launchRocket(){
   const x=Math.random()*cj.width;
@@ -924,7 +940,6 @@ function actualizar(dt){
   for(let i=postersCayendo.length-1;i>=0;i--){ const f=postersCayendo[i];
     f.vy+=600*dt; f.y+=f.vy*dt; f.rot+=f.vrot*dt; if(f.y>cj.height+120) postersCayendo.splice(i,1); }
 
-  // física de los relojes: salen de la caja y caen esparcidos
   { const s=Math.max(cv.width/IW,cv.height/IH);
     for(const rj of relojes){
       if(!rj.settled){
