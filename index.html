@@ -558,7 +558,6 @@ function cartelRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX-120)*s, 
 function barRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.barX-75)*s, y:oy+406*s, w:150*s, h:60*s }; }
 function posterRect(p){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX+p.off)*s, y:oy+452*s, w:56*s, h:72*s }; }
 function crateRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+L.crateX*s, y:oy+570*s, w:48*s, h:42*s }; }
-/* LUNA real: círculo blanco con cráteres, arriba a la IZQUIERDA (150,60) */
 function lunaRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(150-20)*s, y:oy+(60-20)*s, w:40*s, h:40*s }; }
 
 function posicionesLetras(){
@@ -818,11 +817,17 @@ function aparecerPersonaje(){
     fase:'entrando', progreso:0, tiempoVisible: 1.0 + Math.random()*1.2, tDisparo:0, disparado:false });
 }
 
+/* Perickko dispara un CHORRO DE AGUA muy acuoso */
 function disparoEnemigo(a){
   const {gx,gy} = datosPistola();
   efectos.push({tipo:'flashEnemigo', x:a.fx, y:a.fy, vida:0.15});
-  efectos.push({tipo:'balaEnemiga', x0:a.fx, y0:a.fy, x1:gx, y1:gy-30, vida:0.12, total:0.12});
-  reproducir(SONIDOS_DISPARO_ESPECIALES[ARCHIVOS[a.pers]] || 'disparo2');
+  if(ARCHIVOS[a.pers]==='perickko.png'){
+    efectos.push({tipo:'chorroAgua', x0:a.fx, y0:a.fy, x1:gx, y1:gy-30, vida:0.6, total:0.6});
+    splash();
+  } else {
+    efectos.push({tipo:'balaEnemiga', x0:a.fx, y0:a.fy, x1:gx, y1:gy-30, vida:0.12, total:0.12});
+    reproducir(SONIDOS_DISPARO_ESPECIALES[ARCHIVOS[a.pers]] || 'disparo2');
+  }
   dispararon[a.pers]++;
   if(PENALIZACION > 0){
     score = Math.max(0, score - PENALIZACION);
@@ -1012,7 +1017,6 @@ function disparar(x,y){
   const s = Math.max(cv.width/IW, cv.height/IH);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
 
-  // estrella fugaz (cazable +50)
   if(estrellaFugaz){
     const ef=estrellaFugaz;
     if(Math.abs(x-ef.x)<24*s && Math.abs(y-ef.y)<24*s){
@@ -1023,7 +1027,6 @@ function disparar(x,y){
     }
   }
 
-  // LUNA: guiña y lanza estrella fugaz
   const lr = lunaRect();
   if(x>lr.x && x<lr.x+lr.w && y>lr.y && y<lr.y+lr.h){
     if(lunaCd<=0){
@@ -1387,6 +1390,35 @@ function dibujarEfectos(){
       O.strokeStyle = e.tipo==='bala'?'rgba(255,200,90,0.9)':'rgba(255,90,60,0.9)'; O.lineWidth=3;
       O.beginPath(); O.moveTo(tx,ty); O.lineTo(px,py); O.stroke();
       O.fillStyle = e.tipo==='bala'?'#ffe9a0':'#ffb0a0'; O.beginPath(); O.arc(px,py,4,0,Math.PI*2); O.fill();
+    } else if(e.tipo==='chorroAgua'){
+      const t=1-e.vida/e.total;
+      const a=Math.min(1,e.vida*2.5);
+      const fx0=e.x0, fy0=e.y0;
+      const frontX=e.x0+(e.x1-e.x0)*t, frontY=e.y0+(e.y1-e.y0)*t;
+      const midX=(fx0+frontX)/2, midY=(fy0+frontY)/2+26;
+      O.lineCap='round';
+      O.strokeStyle='rgba(60,130,220,'+(0.75*a)+')'; O.lineWidth=8;
+      O.beginPath(); O.moveTo(fx0,fy0); O.quadraticCurveTo(midX,midY,frontX,frontY); O.stroke();
+      O.strokeStyle='rgba(160,215,255,'+(0.9*a)+')'; O.lineWidth=3.5;
+      O.beginPath(); O.moveTo(fx0,fy0); O.quadraticCurveTo(midX,midY,frontX,frontY); O.stroke();
+      for(let k=0;k<9;k++){
+        const tt=Math.max(0,t-k*0.04);
+        const wob=Math.sin(tt*22+k*1.7)*4;
+        const dx=fx0+(e.x1-fx0)*tt + wob*0.4;
+        const dy=fy0+(e.y1-fy0)*tt + wob;
+        O.globalAlpha=a*(1-k*0.09);
+        O.fillStyle= k%3===0 ? 'rgba(220,240,255,0.95)' : 'rgba(120,190,255,0.9)';
+        O.beginPath(); O.arc(dx,dy,(k%3===0?2.2:4.5)-k*0.3,0,Math.PI*2); O.fill();
+      }
+      O.globalAlpha=1;
+      for(let k=0;k<6;k++){
+        const ang=k/6*Math.PI*2 + t*6;
+        const rr=6+(t*14)%8;
+        O.globalAlpha=a*0.8;
+        O.fillStyle='rgba(200,235,255,0.9)';
+        O.beginPath(); O.arc(frontX+Math.cos(ang)*rr, frontY+Math.sin(ang)*rr, 2.5,0,Math.PI*2); O.fill();
+      }
+      O.globalAlpha=1;
     } else if(e.tipo==='flashEnemigo'){
       const f=e.vida/0.15; O.fillStyle='rgba(255,180,80,'+f+')'; estrella(e.x,e.y,30*f+6); O.fill();
       O.fillStyle='rgba(255,255,220,'+f+')'; O.beginPath(); O.arc(e.x,e.y,(30*f+6)*0.35,0,Math.PI*2); O.fill();
