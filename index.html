@@ -160,7 +160,7 @@ function wood(x,y,w,h,base,plank=26,vert=true){
 function calcLayout(){
  const CX=IW/2, U=Math.min(388,CX-150), Lo=Math.min(340,CX-170);
  L={CX, chim:CX-70, cat:Math.max(70,CX-380), barX:Math.min(CX+418,IW-170),
-  troughX:Math.min(CX+140,IW-260), crateX:Math.max(20,CX-358),
+  troughX:Math.min(CX+140,IW-260), crateX:Math.max(20,CX-190),
   hitchX:Math.max(40,CX-526), skullX:Math.max(20,CX-112), agave:Math.max(20,CX-415),
   upC:[CX-U,CX,CX+U], loC:[CX-Lo,CX+Lo],
   wallLant:[CX-232,CX+120], hang:[CX-208,CX+208], postC:[]};
@@ -175,7 +175,6 @@ function calcLayout(){
 function spawnRect(i){const s=Math.max(cv.width/IW,cv.height/IH);
  const ox=(cv.width-IW*s)/2,oy=(cv.height-IH*s)/2,r=SPAWNS[i];
  return{x:ox+r.x*s,y:oy+r.y*s,w:r.w*s,h:r.h*s}}
-
 function mesa(yB,amp,c1,c2,so,rim){
  const pts=[[0,yB-sr(so)*amp]];let x=0;
  while(x<IW){const w=120+rnd()*160,t=yB-rnd()*amp;pts.push([x,t],[Math.min(IW,x+w),t]);x+=w}
@@ -318,7 +317,6 @@ const cloudCv=document.createElement('canvas');cloudCv.width=300;cloudCv.height=
 const twCv=document.createElement('canvas');twCv.width=44;twCv.height=44;
 {const c=twCv.getContext('2d');c.strokeStyle='#8a6a3a';
  for(let i=0;i<26;i++){c.lineWidth=1+sr(i);c.beginPath();c.arc(22,22,6+sr(i+4)*14,sr(i+8)*6,sr(i+8)*6+2+sr(i)*3);c.stroke()}}
-
 const smoke=[]; let lastSmoke=0;
 function cieloDyn(t){
  for(let i=0;i<12;i++)if((i+Math.floor(t*2))%3)P(60+i*(IW/12),8+sr(i)*60,2,2,'rgba(255,240,210,.9)');
@@ -368,7 +366,7 @@ function loop(now){
 }
 requestAnimationFrame(loop);
 </script>
-
+<!-- === FIN DE LA PARTE 1 === -->
 <script>
 /* ================= MECÁNICA DEL JUEGO (overlay por capas) ================= */
 (() => {
@@ -490,6 +488,26 @@ let gallinaRatio = 232/300;
 { const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0)
   gallinaRatio = img.naturalWidth/img.naturalHeight; }; img.src='gallina.webp'; }
 
+function trimAlpha(c){
+  const x=c.getContext('2d'); const w=c.width,h=c.height;
+  const data=x.getImageData(0,0,w,h).data;
+  let top=h,bot=-1,left=w,right=-1;
+  for(let y=0;y<h;y++)for(let i=0;i<w;i++){
+    if(data[(y*w+i)*4+3]>10){ if(y<top)top=y; if(y>bot)bot=y; if(i<left)left=i; if(i>right)right=i; }
+  }
+  if(bot<0) return c;
+  const c2=document.createElement('canvas');
+  c2.width=right-left+1; c2.height=bot-top+1;
+  c2.getContext('2d').drawImage(c,left,top,c2.width,c2.height,0,0,c2.width,c2.height);
+  return c2;
+}
+
+let cabezaSprite=null, cabezaRatio=0.55;
+{ const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0){
+  try{ const t=trimAlpha(procesar(img)); cabezaSprite=t; cabezaRatio=t.width/t.height; }
+  catch(e){ cabezaSprite=img; cabezaRatio=img.naturalWidth/img.naturalHeight; } } };
+  img.src='daniju-muelle.png'; }
+
 function finCarga(){
   if(++listos === ARCHIVOS.length){
     cargado = true;
@@ -521,6 +539,8 @@ let relojes = [], monedas = [];
 let fuegos = { launch:0, rockets:[], parts:[] };
 let freeze = 0;
 let lunaWink = 0, lunaCd = 0, estrellaFugaz = null;
+let cabeza = { active:false, t:0, soundDone:false };
+let fuegoParts = [];
 let tiroteados = Array(ARCHIVOS.length).fill(0);
 let dispararon = Array(ARCHIVOS.length).fill(0);
 let score = 0, tiempo = 60, balas = 6, racha = 0;
@@ -558,7 +578,7 @@ function cartelRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX-120)*s, 
 function barRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.barX-75)*s, y:oy+406*s, w:150*s, h:60*s }; }
 function posterRect(p){ const {s,ox,oy}=escalaEsc(); return { x:ox+(L.CX+p.off)*s, y:oy+452*s, w:56*s, h:72*s }; }
 function crateRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+L.crateX*s, y:oy+570*s, w:48*s, h:42*s }; }
-function lunaRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(150-20)*s, y:oy+(60-20)*s, w:40*s, h:40*s }; }
+function lunaRect(){ const {s,ox,oy}=escalaEsc(); return { x:ox+(150-28)*s, y:oy+(60-28)*s, w:56*s, h:56*s }; }
 
 function posicionesLetras(){
   const {s,ox,oy}=escalaEsc();
@@ -699,6 +719,35 @@ function sonidoExplosion(){
   g2.gain.exponentialRampToValueAtTime(0.001,t0+dur);
   src.connect(f); f.connect(g2); g2.connect(audioCtx.destination); src.start(t0);
 }
+function sonidoMuelle(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(300,t0);
+  o.frequency.exponentialRampToValueAtTime(150,t0+0.08);
+  o.frequency.exponentialRampToValueAtTime(400,t0+0.16);
+  o.frequency.exponentialRampToValueAtTime(200,t0+0.26);
+  o.frequency.exponentialRampToValueAtTime(300,t0+0.34);
+  const g=audioCtx.createGain();
+  g.gain.setValueAtTime(0.5,t0);
+  g.gain.exponentialRampToValueAtTime(0.001,t0+0.4);
+  o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0+0.45);
+}
+function sonidoFuego(){
+  if(!audioCtx) return;
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  const t0=audioCtx.currentTime; const dur=1.2;
+  const buf=audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate*dur), audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){ const t=i/d.length; d[i]=(Math.random()*2-1)*Math.pow(1-t,1.2); }
+  const src=audioCtx.createBufferSource(); src.buffer=buf;
+  const f=audioCtx.createBiquadFilter(); f.type='bandpass';
+  f.frequency.setValueAtTime(900,t0); f.frequency.exponentialRampToValueAtTime(200,t0+dur); f.Q.value=0.8;
+  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.5,t0);
+  g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  src.connect(f); f.connect(g); g.connect(audioCtx.destination); src.start(t0);
+}
 function splash(){
   if(!audioCtx) return;
   if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
@@ -788,6 +837,25 @@ function soltarMonedas(){
   }
   sonidoDerrameMonedas();
 }
+function soltarCabeza(){
+  cabeza.active=true; cabeza.t=0; cabeza.soundDone=false;
+  sonidoMuelle();
+}
+function cabezaParams(){
+  const {s}=escalaEsc();
+  const cr=crateRect();
+  const cx=cr.x+cr.w/2;
+  const topY=cr.y+6;
+  const fullH=140*s;
+  const T=cabeza.t;
+  let e;
+  if(T<0.5) e=easeOut(T/0.5);
+  else if(T<2.0) e=1;
+  else e=Math.max(0,1-(T-2.0)/0.6);
+  const drawH=fullH*e;
+  const drawW=drawH*cabezaRatio;
+  return {s,cx,topY,drawH,drawW,e, mouthX:cx, mouthY:topY-drawH*0.5};
+}
 function spawnEstrellaFugaz(){
   const {s,ox,oy}=escalaEsc();
   const mx=ox+150*s, my=oy+60*s;
@@ -817,7 +885,6 @@ function aparecerPersonaje(){
     fase:'entrando', progreso:0, tiempoVisible: 1.0 + Math.random()*1.2, tDisparo:0, disparado:false });
 }
 
-/* Perickko dispara un CHORRO DE AGUA muy acuoso */
 function disparoEnemigo(a){
   const {gx,gy} = datosPistola();
   efectos.push({tipo:'flashEnemigo', x:a.fx, y:a.fy, vida:0.15});
@@ -919,6 +986,27 @@ function actualizar(dt){
     ef.x+=ef.vx*dt; ef.y+=ef.vy*dt; ef.vida-=dt;
     if(ef.vida<=0 || ef.x<-50 || ef.y>cj.height+50) estrellaFugaz=null; }
 
+  if(cabeza.active){
+    cabeza.t += dt;
+    const T=cabeza.t;
+    if(T>0.5 && T<2.0){
+      if(!cabeza.soundDone){ sonidoFuego(); cabeza.soundDone=true; }
+      const p=cabezaParams();
+      for(let k=0;k<2;k++){
+        fuegoParts.push({
+          x:p.mouthX+(Math.random()-0.5)*6, y:p.mouthY,
+          vx:(Math.random()-0.5)*70*p.s, vy:-(40+Math.random()*90)*p.s,
+          r:(2+Math.random()*3)*p.s, vida:0.5+Math.random()*0.4,
+          color: Math.random()<0.5?'rgba(255,140,40,0.9)':'rgba(255,200,60,0.9)'
+        });
+      }
+    }
+    if(T>=2.6){ cabeza.active=false; crateOpen=false; crateStage=4; }
+  }
+  for(let i=fuegoParts.length-1;i>=0;i--){ const f=fuegoParts[i];
+    f.vy+=300*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.vida-=dt;
+    if(f.vida<=0) fuegoParts.splice(i,1); }
+
   if(freeze>0){
     freeze-=dt;
     fuegos.launch-=dt;
@@ -1017,16 +1105,6 @@ function disparar(x,y){
   const s = Math.max(cv.width/IW, cv.height/IH);
   efectos.push({tipo:'bala', x0:bx, y0:by, x1:x, y1:y, vida:0.09, total:0.09});
 
-  if(estrellaFugaz){
-    const ef=estrellaFugaz;
-    if(Math.abs(x-ef.x)<24*s && Math.abs(y-ef.y)<24*s){
-      score+=50; sonidoPremio();
-      efectos.push({tipo:'texto', x:ef.x, y:ef.y-14, vida:0.9, texto:'⭐ +50', color:'#fff6d8'});
-      estrellaFugaz=null;
-      return;
-    }
-  }
-
   const lr = lunaRect();
   if(x>lr.x && x<lr.x+lr.w && y>lr.y && y<lr.y+lr.h){
     if(lunaCd<=0){
@@ -1035,6 +1113,16 @@ function disparar(x,y){
       sonidoLuna();
     }
     return;
+  }
+
+  if(estrellaFugaz){
+    const ef=estrellaFugaz;
+    if(Math.abs(x-ef.x)<24*s && Math.abs(y-ef.y)<24*s){
+      score+=50; sonidoPremio();
+      efectos.push({tipo:'texto', x:ef.x, y:ef.y-14, vida:0.9, texto:'⭐ +50', color:'#fff6d8'});
+      estrellaFugaz=null;
+      return;
+    }
   }
 
   const gr = gatoRect();
@@ -1068,7 +1156,11 @@ function disparar(x,y){
 
   const cr2 = crateRect();
   if(x>cr2.x && x<cr2.x+cr2.w && y>cr2.y && y<cr2.y+cr2.h){
-    if(crateStage>=3){ golpeMadera(); return; }
+    if(crateStage>=4){ golpeMadera(); return; }
+    if(crateStage===3){
+      if(!cabeza.active){ soltarCabeza(); }   // la caja NO se rompe: sale la cabeza con muelle
+      return;
+    }
     if(crateOpen) return;
     crateOpen=true; sonidoExplosion();
     efectos.push({tipo:'flashEnemigo', x:cr2.x+cr2.w/2, y:cr2.y+cr2.h/2, vida:0.2});
@@ -1310,6 +1402,20 @@ function dibujarCaja(){
     octx.save(); octx.translate(X+W,Y+H); octx.rotate(0.5); octx.fillStyle='#8a6034'; octx.fillRect(0,0,18*s,4*s); octx.restore();
   }
 }
+function dibujarCabeza(){
+  if(!cabeza.active || !cabezaSprite) return;
+  const p=cabezaParams();
+  if(p.e<=0) return;
+  octx.drawImage(cabezaSprite, p.cx-p.drawW/2, p.topY-p.drawH, p.drawW, p.drawH);
+}
+function dibujarFuegoParts(){
+  for(const f of fuegoParts){
+    octx.globalAlpha=Math.max(0,Math.min(1,f.vida*2));
+    octx.fillStyle=f.color;
+    octx.beginPath(); octx.arc(f.x,f.y,f.r,0,Math.PI*2); octx.fill();
+  }
+  octx.globalAlpha=1;
+}
 function dibujarItems(){
   const s=Math.max(cv.width/IW,cv.height/IH);
   for(const rj of relojes){
@@ -1475,14 +1581,15 @@ function bucle(t){
   dibujarAgujeros();
   dibujarLuna();
   dibujarEstrellaFugaz();
-  dibujarCaja();
-  dibujarItems();
+  dibujarCaja();  dibujarItems();
   dibujarCartel(now);
   dibujarCartelBAR(now);
   dibujarPosters();
   dibujarAgua();
   dibujarPersonajes();
   dibujarCoches();
+  dibujarCabeza();
+  dibujarFuegoParts();
   octx.restore();
 
   fctx.clearRect(0,0,fx.width,fx.height);
@@ -1526,6 +1633,7 @@ function empezar(){
   crateStage=0; crateOpen=false; relojes=[]; monedas=[];
   fuegos={launch:0,rockets:[],parts:[]}; freeze=0;
   lunaWink=0; lunaCd=0; estrellaFugaz=null;
+  cabeza={active:false,t:0,soundDone:false}; fuegoParts=[];
   activos=[]; efectos=[]; agujeros=[]; fugas=[]; gotas=[]; charcos=[];
   for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
   gallinas=[]; letrasVolando=[]; letrasBARVolando=[]; postersCayendo=[];
