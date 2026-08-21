@@ -11,6 +11,7 @@
   #juego { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:2;
     cursor:none; touch-action:none; }
   #caballoImg, #caballo2Img { position:fixed; left:0; top:0; z-index:3; display:none; pointer-events:none; }
+  .runner { position:fixed; left:0; top:0; z-index:50; display:block; pointer-events:none; }
   .gallina { position:fixed; left:0; top:0; z-index:3; display:block; pointer-events:none; }
   #fx { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:4;
     pointer-events:none; }
@@ -487,6 +488,10 @@ caballo2ImgEl.src = 'wuantiles-a-caballo.webp';
 let gallinaRatio = 232/300;
 { const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0)
   gallinaRatio = img.naturalWidth/img.naturalHeight; }; img.src='gallina.webp'; }
+let corredores = [];
+let runnerRatio = 1.5;
+{ const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0) runnerRatio=img.naturalWidth/img.naturalHeight; }; img.src='docymarty.webp'; }
+
 
 function trimAlpha(c){
   const x=c.getContext('2d'); const w=c.width,h=c.height;
@@ -624,7 +629,8 @@ const RUTAS_SONIDO = {
   disparo:'disparo.ogg', disparo2:'disparo2.ogg', recarga:'recarga.ogg', ouch:'ouch.ogg',
   lajefa:'lajefa.ogg', perickko:'perickko.ogg', chocobo:'chocobo.ogg',
   disparoPixel:'disparo-pixelmaster.ogg', delorian:'delorian.ogg',
-  trote:'trotedecaballo.ogg', miau:'miau.ogg', fuegos:'fuegos-artificiales.ogg'
+  trote:'trotedecaballo.ogg', miau:'miau.ogg', fuegos:'fuegos-artificiales.ogg',
+  docymarty:'docymarty.ogg'
 };
 const SONIDOS_ESPECIALES = { 'lajefa.png':'lajefa', 'perickko.png':'perickko', 'chocobo.png':'chocobo' };
 const SONIDOS_DISPARO_ESPECIALES = { 'pixelmaster.png':'disparoPixel' };
@@ -812,6 +818,15 @@ function soltarGallina(){
   gallinas.push({ x: dir>0 ? -60 : cj.width+60, dir, vel: 260+Math.random()*120, t: Math.random()*10, el });
   reproducir('chocobo');
 }
+function spawnRunner(st, c){
+  const {s,ox,oy}=escalaEsc();
+  const carX = ox + (c.xInt + c.wInt/2)*s;
+  const el=document.createElement('img');
+  el.src='docymarty.webp'; el.alt=''; el.className='runner';
+  document.body.appendChild(el);
+  corredores.push({ el, dir:st.dir, x:carX - st.dir*300*s, vel:c.vel*s, cool:0 });
+  reproducir('docymarty');
+}
 function soltarRelojes(){
   const {s,ox,oy}=escalaEsc();
   const cx=ox+(L.crateX+24)*s, cy=oy+585*s;
@@ -928,6 +943,7 @@ function actualizarCoches(dt){
                    willSlow: esDelorean && Math.random()<0.5, slowP: 0.3 + Math.random()*0.3,
                    slowUsed:false, slowActive:false, slowT:0, slowDur:0 };
           st.c.snd = reproducir(esDelorean ? 'delorian' : 'trote');
+          if(esDelorean && !st.c.willSlow && Math.random()<0.3){ spawnRunner(st, st.c); }
         }
       }
     } else {
@@ -1043,6 +1059,16 @@ function actualizar(dt){
       a.y = fy + (sy-fy)*easeOut(Math.min(a.progreso,1)); }
   }
   actualizarCoches(dt);
+  { const {s,oy}=escalaEsc();
+    for(let i=corredores.length-1;i>=0;i--){ const r=corredores[i];
+      r.x += r.dir*r.vel*dt; r.cool=Math.max(0,r.cool-dt);
+      const H=130*s, W=H*runnerRatio;
+      const top=oy+700*s - H;
+      r.el.style.width=W+'px'; r.el.style.height=H+'px';
+      r.el.style.left=(r.x-W/2)+'px'; r.el.style.top=top+'px';
+      r.el.style.transform = r.dir<0 ? 'scaleX(-1)':'none';
+      if((r.dir>0 && r.x>cj.width+W) || (r.dir<0 && r.x<-W)){ r.el.remove(); corredores.splice(i,1); }
+    } }
 
   cartel.vel += -cartel.ang*6*dt; cartel.vel *= Math.max(0,1-1.1*dt); cartel.ang += cartel.vel*dt;
   cartelBAR.vel += -cartelBAR.ang*6*dt; cartelBAR.vel *= Math.max(0,1-1.1*dt); cartelBAR.ang += cartelBAR.vel*dt;
@@ -1191,6 +1217,22 @@ function disparar(x,y){
         efectos.push({tipo:'acertado', x:gll.x, y:gy-h, vida:0.8, texto:'🐔 +'+pts+(mult>1?' (x'+mult+')':''), color:'#ffffff'});
         gll.el.remove(); gallinas.splice(i,1); return; } } }
 
+  { const {s,oy}=escalaEsc();
+    for(const r of corredores){
+      if(r.cool<=0){
+        const H=130*s, W=H*runnerRatio;
+        const top=oy+700*s - H;
+        if(x>r.x-W/2 && x<r.x+W/2 && y>top && y<top+H){
+          r.cool=1;
+          for(let k=0;k<2;k++){
+            relojes.push({ x:r.x+(Math.random()-0.5)*30*s, y:top+H*0.5,
+              vx:(Math.random()-0.5)*140*s, vy:-(150+Math.random()*100)*s,
+              gy:oy+600*s+Math.random()*40*s, rot:0, vrot:(Math.random()-0.5)*12, settled:false, t:0 });
+          }
+          return;
+        }
+      }
+    } }
   const br = barrilRect();
   if(x>br.x && x<br.x+br.w && y>br.y && y<br.y+br.h){ golpeMadera(); soltarGallina(); return; }
 
@@ -1606,6 +1648,8 @@ function bucle(t){
     if(esTouch) btnRecarga.style.display='none';
     caballoImgEl.style.display='none'; caballo2ImgEl.style.display='none';
     for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
+  for(const r of corredores){ if(r.el) r.el.remove(); }
+  corredores=[];
     gallinas=[];
     fctx.fillStyle='rgba(0,0,0,0.6)'; fctx.fillRect(0,0,fx.width,fx.height);
     fctx.fillStyle='#ffd97a'; fctx.textAlign='center';
