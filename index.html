@@ -289,8 +289,26 @@ function bakeTown(){
  lgm(L.troughX,566,120,34,[[0,'#6a4526'],[1,'#3a2010']]);
  lgm(L.troughX+6,570,108,8,[[0,'#e97b3f'],[.5,'#b8434e'],[1,'#6b2a55']]);
  P(L.troughX,596,8,12,'#2a1808');P(L.troughX+112,596,8,12,'#2a1808');
- G.fillStyle='#e8e0d0';G.beginPath();G.ellipse(L.skullX,688,10,7,0,0,7);G.fill();
- G.fillStyle='#0a0610';G.beginPath();G.arc(L.skullX-4,688,2.5,0,7);G.arc(L.skullX+4,688,2.5,0,7);G.fill();
+  { const x=L.skullX, y=688;
+   // cuernos
+   G.strokeStyle='#d9cfc0'; G.lineWidth=3; G.lineCap='round';
+   G.beginPath(); G.moveTo(x-8,y-4); G.quadraticCurveTo(x-16,y-6,x-18,y-12); G.stroke();
+   G.beginPath(); G.moveTo(x+8,y-4); G.quadraticCurveTo(x+16,y-6,x+18,y-12); G.stroke();
+   // cráneo
+   G.fillStyle='#e8e0d0';
+   G.beginPath(); G.ellipse(x,y-2,9,7,0,0,7); G.fill();
+   G.beginPath(); G.ellipse(x,y+5,5,5,0,0,7); G.fill();
+   // cuencas de los ojos
+   G.fillStyle='#241a12';
+   G.beginPath(); G.ellipse(x-4,y-3,2.6,3,0,0,7); G.fill();
+   G.beginPath(); G.ellipse(x+4,y-3,2.6,3,0,0,7); G.fill();
+   // fosas nasales
+   G.beginPath(); G.ellipse(x-1.6,y+5,1,1.4,0,0,7); G.fill();
+   G.beginPath(); G.ellipse(x+1.6,y+5,1,1.4,0,0,7); G.fill();
+   // grieta central
+   G.strokeStyle='rgba(0,0,0,.15)'; G.lineWidth=1;
+   G.beginPath(); G.moveTo(x,y-8); G.lineTo(x,y-1); G.stroke();
+ }
  for(let i=0;i<IW/10;i++){const x=rnd()*IW,y=604+rnd()*110,hh=6+rnd()*10,a=(rnd()-.5)*.8;
   G.strokeStyle=`rgba(${180+rnd()*60|0},${140+rnd()*40|0},60,${.4+rnd()*.4})`;G.lineWidth=1.5;
   G.beginPath();G.moveTo(x,y);G.quadraticCurveTo(x+a*6,y-hh*.6,x+a*10,y-hh);G.stroke()}
