@@ -60,11 +60,33 @@
   .cajaRec { background:rgba(30,15,5,.95); border:3px solid #c8892f; border-radius:12px;
     padding:22px 30px; text-align:center; color:#fff; font-family:Georgia,serif; }
   .titRec { font-size:26px; color:#ffd97a; margin-bottom:14px; }
+.ptsRec { font-size:30px; color:#fff; font-weight:bold; margin-bottom:16px; text-shadow:0 0 10px rgba(255,217,122,.6); }
   #nombreRec { font-size:20px; padding:8px 12px; border-radius:6px; border:2px solid #c8892f;
     background:#1a0f05; color:#fff; text-align:center; font-family:Georgia,serif; width:190px; }
   #btnGuardar { margin-left:10px; padding:10px 22px; font-size:18px; font-family:Georgia,serif;
     background:#c8892f; border:none; border-radius:6px; color:#2b1a0a; cursor:pointer;
     touch-action:manipulation; }
+#topModal { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.7); z-index:13; }
+.cajaTop { background:rgba(30,15,5,.96); border:3px solid #c8892f; border-radius:12px;
+  padding:16px 22px; text-align:center; color:#fff; font-family:Georgia,serif;
+  display:flex; flex-direction:column; box-sizing:border-box;
+  width:min(420px, 92vw); height:90vh; max-height:600px; }
+.titTop { font-size:24px; color:#ffd97a; margin-bottom:10px; flex:none; }
+.topLista { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.topFila { flex:1; min-height:0; display:flex; align-items:center; justify-content:space-between;
+  padding:0 12px; font-size:clamp(13px, 2.4vh, 20px);
+  border-bottom:1px solid rgba(200,137,47,.25); }
+.topFila .pos { color:#c8892f; font-weight:bold; width:2.2em; text-align:left; }
+.topFila .nom { flex:1; text-align:left; margin:0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.topFila .pts { color:#ffd97a; font-weight:bold; }
+.topFila.mia { background:rgba(255,217,122,.16); border-radius:6px; }
+.topFila.mia .nom, .topFila.mia .pts { color:#ffe9a0; }
+.topFila.vacia { color:#7a6a50; justify-content:center; }
+#btnJugarOtra { margin-top:12px; padding:12px 30px; font-size:20px; font-family:Georgia,serif;
+  background:#c8892f; border:none; border-radius:6px; color:#2b1a0a; cursor:pointer;
+  touch-action:manipulation; flex:none; }
+#btnJugarOtra:hover { background:#e8a94f; }
 </style>
 </head>
 <body>
@@ -98,8 +120,17 @@ window.addEventListener('error', function(e){
 <div id="record">
   <div class="cajaRec">
     <div class="titRec">🏆 ¡NUEVO RÉCORD!</div>
+    <div id="ptsRec" class="ptsRec"></div>
     <input id="nombreRec" maxlength="14" placeholder="Tu nombre" autocomplete="off">
     <button id="btnGuardar">GUARDAR</button>
+  </div>
+</div>
+
+<div id="topModal">
+  <div class="cajaTop">
+    <div class="titTop">🏆 TOP 10 DEL SALOON</div>
+    <div id="topLista" class="topLista"></div>
+    <button id="btnJugarOtra">🔁 JUGAR OTRA VEZ</button>
   </div>
 </div>
 
@@ -401,7 +432,11 @@ const avisoEl = document.getElementById('aviso');
 const pantallaEl = document.getElementById('pantalla');
 const recordEl = document.getElementById('record');
 const nombreRec = document.getElementById('nombreRec');
+const ptsRec = document.getElementById('ptsRec');
 const btnGuardar = document.getElementById('btnGuardar');
+const topModal = document.getElementById('topModal');
+const topLista = document.getElementById('topLista');
+const btnJugarOtra = document.getElementById('btnJugarOtra');
 const caballoImgEl  = document.getElementById('caballoImg');
 const caballo2ImgEl = document.getElementById('caballo2Img');
 function resizeJ(){
@@ -424,6 +459,31 @@ function cargarTopOnline(){
     const t3 = (top||[]).slice(0,3).map(r=>r.name+' ('+r.score+')');
     el.textContent = t3.length ? '🌐 Top del saloon: '+t3.join(' · ') : '🌐 Top del saloon: aún vacío';
   }).catch(()=>{ el.textContent=''; });
+}
+
+function cargarTopModal(miNom, miPts){
+  topLista.innerHTML='<div class="topFila vacia">Cargando…</div>';
+  if(!API_URL){ topLista.innerHTML='<div class="topFila vacia">Sin conexión al saloon</div>'; return; }
+  fetch(API_URL+'/api/top').then(r=>r.json()).then(top=>{
+    const arr=(top||[]).slice(0,10);
+    topLista.innerHTML='';
+    let marcada=false;
+    for(let i=0;i<10;i++){
+      const fila=document.createElement('div');
+      if(i<arr.length){
+        const r=arr[i];
+        const esMia = !marcada && r.name===miNom && r.score===miPts;
+        if(esMia) marcada=true;
+        fila.className='topFila'+(esMia?' mia':'');
+        fila.innerHTML='<span class="pos">'+(i+1)+'º</span><span class="nom"></span><span class="pts">'+r.score+'</span>';
+        fila.querySelector('.nom').textContent=r.name;
+      } else {
+        fila.className='topFila vacia';
+        fila.textContent='— vacío —';
+      }
+      topLista.appendChild(fila);
+    }
+  }).catch(()=>{ topLista.innerHTML='<div class="topFila vacia">Sin conexión al saloon</div>'; });
 }
 
 let record = null;
@@ -1897,7 +1957,7 @@ function bucle(t){
   O=fctx; dibujarHUD(); if(!esTouch) dibujarMira();
   if(!jugando && tiempo<=0){
     if(!recordCheckHecho){ recordCheckHecho=true;
-      if(score>0 && (!record || score>record.score)){ esperandoNombre=true; nombreRec.value=nombrePrev; recordEl.style.display='flex'; } }
+       if(score>0 && (!record || score>record.score)){ esperandoNombre=true; nombreRec.value=nombrePrev; ptsRec.textContent='⭐ '+score+' puntos'; recordEl.style.display='flex'; } }
     if(esTouch) btnRecarga.style.display='none';
     caballoImgEl.style.display='none'; caballo2ImgEl.style.display='none';
     for(const gll of gallinas){ if(gll.el) gll.el.remove(); }
@@ -1980,8 +2040,18 @@ btnGuardar.addEventListener('click', e=>{
   try{ localStorage.setItem('fevercadeRecord',JSON.stringify(record)); localStorage.setItem('fevercadeNombre',nom);}catch(err){}
   enviarRecordOnline(nom,score); setTimeout(cargarTopOnline,3000);
   nombrePrev=nom; recordEl.style.display='none'; esperandoNombre=false; pintarRecord();
+  const ptsGuardados=score;
+  topLista.innerHTML='<div class="topFila vacia">Cargando…</div>';
+  topModal.style.display='flex';
+  setTimeout(()=>cargarTopModal(nom, ptsGuardados), 3000);
 });
 nombreRec.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.stopPropagation(); btnGuardar.click(); } });
+
+btnJugarOtra.addEventListener('click', e=>{
+  e.stopPropagation();
+  topModal.style.display='none';
+  empezar();
+});
 
 actualizarOrientacion();
 requestAnimationFrame(bucle);
